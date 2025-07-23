@@ -1,86 +1,185 @@
-import * as React from "react";
-import Header from "./Header";
-import HeroList, { HeroListItem } from "./HeroList";
-import TextInsertion from "./TextInsertion";
-import { makeStyles } from "@fluentui/react-components";
-import { Ribbon24Regular, LockOpen24Regular, DesignIdeas24Regular } from "@fluentui/react-icons";
-import { insertText } from "../taskpane";
+import React, { useState, useEffect } from "react";
+import { checkFormat } from "../../commands/commands";
 
-interface AppProps {
-  title: string;
+interface SelectOption {
+  value: string;
+  label: string;
 }
 
-const useStyles = makeStyles({
-  root: {
-    minHeight: "100vh",
-    padding: "1rem",
-  },
-  jsonOutput: {
-    marginTop: "1rem",
-    padding: "1rem",
-    backgroundColor: "#f5f5f5",
-    border: "1px solid #ccc",
-    borderRadius: "5px",
-    whiteSpace: "pre-wrap",
-    wordWrap: "break-word",
-    fontFamily: "monospace",
-    fontSize: "14px",
-    maxHeight: "300px",
-    overflowY: "auto",
-    color: "black"
-  },
-});
+const App: React.FC<{ title: string }> = () => {
+  const [form, setForm] = useState({
+    testName: "",
+    testType: "",
+    testCode: "",
+    category: "",
+    instructions: "",
+    duration: "",
+    handicappedDuration: "",
+    totalQuestions: "",
+    totalMarks: "",
+    difficulty: "",
+    secondaryTestType: "",
+  });
 
-const App: React.FC<AppProps> = (props: AppProps) => {
-  const styles = useStyles();
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [message, setMessage] = useState<string | null>(null);
+  const [isError, setIsError] = useState(false);
 
-  const listItems: HeroListItem[] = [
-    {
-      icon: <Ribbon24Regular />,
-      primaryText: "Achieve more with Office integration",
-    },
-    {
-      icon: <LockOpen24Regular />,
-      primaryText: "Unlock features and functionality",
-    },
-    {
-      icon: <DesignIdeas24Regular />,
-      primaryText: "Create and visualize like a pro",
-    },
-  ];
+  // Dropdown options (fetched from API)
+  const [testTypes, setTestTypes] = useState<SelectOption[]>([]);
+  const [categories, setCategories] = useState<SelectOption[]>([]);
+  const [difficulties, setDifficulties] = useState<SelectOption[]>([]);
+  const [instructionsList, setInstructionsList] = useState<SelectOption[]>([]);
+  const [secondaryTypes, setSecondaryTypes] = useState<SelectOption[]>([]);
 
-React.useEffect(() => {
-  const fetchJson = async () => {
-    try {
-      const storedJson = await OfficeRuntime.storage.getItem("lastExtractedJson");
-      if (storedJson) {
-        const json = JSON.parse(storedJson);
-        console.log("📦 Retrieved JSON from OfficeRuntime.storage:", json);
+  useEffect(() => {
+    // Mock fetching options from API
+    const fetchOptions = async () => {
+      // Replace with real API calls
+      setTestTypes([
+        { value: "objective", label: "Objective" },
+        { value: "subjective", label: "Subjective" },
+      ]);
+      setCategories([
+        { value: "math", label: "Math" },
+        { value: "science", label: "Science" },
+      ]);
+      setInstructionsList([
+        { value: "open_book", label: "Open Book" },
+        { value: "closed_book", label: "Closed Book" },
+      ]);
+      setDifficulties([
+        { value: "easy", label: "Easy" },
+        { value: "medium", label: "Medium" },
+        { value: "hard", label: "Hard" },
+      ]);
+      setSecondaryTypes([
+        { value: "demo", label: "Demo Test" },
+        { value: "practice", label: "Practice Test" },
+      ]);
+    };
 
-        const div = document.getElementById("jsonOutput");
-        if (div) {
-          div.textContent = JSON.stringify(json, null, 2);
-        }
+    fetchOptions();
+  }, []);
+
+  const validate = () => {
+    const newErrors: Record<string, string> = {};
+    for (const key in form) {
+      if (!form[key as keyof typeof form].trim()) {
+        newErrors[key] = "This field is required";
       }
-    } catch (err) {
-      console.error("Error retrieving JSON:", err);
+    }
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  const createTest = async () => {
+    if (!validate()) return;
+
+    const result = await checkFormat();
+    if (!result.success) {
+      setMessage(result.message || "An unknown error occurred.");
+      setIsError(true);
+    } else {
+      setMessage(result.message);
+      setIsError(false);
+      setForm({
+        testName: "",
+        testType: "",
+        testCode: "",
+        category: "",
+        instructions: "",
+        duration: "",
+        handicappedDuration: "",
+        totalQuestions: "",
+        totalMarks: "",
+        difficulty: "",
+        secondaryTestType: "",
+      });
     }
   };
 
-  fetchJson();
-}, []);
+  const renderInput = (name: string, label: string, type: "text" | "number" = "text") => (
+    <div className="flex flex-col">
+      <label htmlFor={name} className="font-semibold">
+        {label}
+      </label>
+      <input
+        type={type}
+        name={name}
+        id={name}
+        value={form[name as keyof typeof form]}
+        onChange={handleChange}
+        className="px-4 py-2 rounded-xl border border-gray-300 shadow-sm"
+      />
+      {errors[name] && <span className="text-red-500 text-sm font-bold">{errors[name]}</span>}
+    </div>
+  );
 
+  const renderSelect = (name: string, label: string, options: SelectOption[]) => (
+    <div className="flex flex-col">
+      <label htmlFor={name} className="font-semibold">
+        {label}
+      </label>
+      <select
+        name={name}
+        id={name}
+        value={form[name as keyof typeof form]}
+        onChange={handleChange}
+        className="px-4 py-2 rounded-xl border border-gray-300 shadow-sm"
+      >
+        <option value="">-- Select --</option>
+        {options.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
+      {errors[name] && <span className="text-red-500 text-sm font-bold">{errors[name]}</span>}
+    </div>
+  );
 
   return (
-    <div className={styles.root}>
-      <Header logo="assets/logo-filled.png" title={props.title} message="Welcome" />
-      <HeroList message="Discover what this add-in can do for you today!" items={listItems} />
-      <TextInsertion insertText={insertText} />
+    <div className="p-6 space-y-4">
+      <h1 className="text-2xl font-bold border-b border-b-gray-300 pb-2 mb-4 text-gray-700">
+        <span className="text-indigo-500">E</span>
+        valus Test Creation Portal
+      </h1>
 
-      {/* ✅ JSON output viewer */}
-      <pre id="jsonOutput" className={styles.jsonOutput}>
-        {/* Output will be injected here */}
-      </pre>
+      {message && (
+        <div
+          className={`p-3 rounded-lg ${
+            isError ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
+          }`}
+        >
+          {message}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {renderInput("testName", "Test Name")}
+        {renderSelect("testType", "Test Type", testTypes)}
+        {renderInput("testCode", "Test Code")}
+        {renderSelect("category", "Category", categories)}
+        {renderSelect("instructions", "Instructions", instructionsList)}
+        {renderInput("duration", "Duration (min)", "number")}
+        {renderInput("handicappedDuration", "Handicapped Duration (min)", "number")}
+        {renderInput("totalQuestions", "Total Questions", "number")}
+        {renderInput("totalMarks", "Total Marks", "number")}
+        {renderSelect("difficulty", "Difficulty", difficulties)}
+        {renderSelect("secondaryTestType", "Secondary Test Type", secondaryTypes)}
+      </div>
+
+      <button
+        onClick={createTest}
+        className="mt-4 font-bold px-6 py-2 bg-indigo-600 text-white rounded-xl shadow hover:bg-indigo-700 transition"
+      >
+        Create Test
+      </button>
     </div>
   );
 };
