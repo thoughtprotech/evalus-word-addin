@@ -150,16 +150,6 @@ const App: React.FC<{ title: string }> = () => {
         valus Test Creation Portal
       </h1>
 
-      {message && (
-        <div
-          className={`p-3 rounded-lg ${
-            isError ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
-          }`}
-        >
-          {message}
-        </div>
-      )}
-
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {renderInput("testName", "Test Name")}
         {renderSelect("testType", "Test Type", testTypes)}
@@ -174,9 +164,19 @@ const App: React.FC<{ title: string }> = () => {
         {renderSelect("secondaryTestType", "Secondary Test Type", secondaryTypes)}
       </div>
 
+      {message && (
+        <div
+          className={`p-3 rounded-lg ${
+            isError ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
+          }`}
+        >
+          {message}
+        </div>
+      )}
+
       <button
         onClick={createTest}
-        className="mt-4 font-bold px-6 py-2 bg-indigo-600 text-white rounded-xl shadow hover:bg-indigo-700 transition"
+        className="w-full mt-4 font-bold px-6 py-2 bg-indigo-600 text-white rounded-xl shadow hover:bg-indigo-700 transition"
       >
         Create Test
       </button>
