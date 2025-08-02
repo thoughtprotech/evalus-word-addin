@@ -18,7 +18,6 @@ const App: React.FC<{ title: string }> = () => {
     totalQuestions: "",
     totalMarks: "",
     difficulty: "",
-    secondaryTestType: "",
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -26,41 +25,108 @@ const App: React.FC<{ title: string }> = () => {
   const [isError, setIsError] = useState(false);
 
   // Dropdown options (fetched from API)
-  const [testTypes, setTestTypes] = useState<SelectOption[]>([]);
-  const [categories, setCategories] = useState<SelectOption[]>([]);
+  const [testTypes, setTestTypes] = useState<
+    {
+      testTypeId: number;
+      testType1: string;
+      language: string;
+      isActive: number;
+      createdBy: string;
+      createdDate: string;
+      modifiedBy: string;
+      modifiedDate: string;
+    }[]
+  >([]);
+  const [categories, setCategories] = useState<
+    {
+      testCategoryId: number;
+      testCategoryName: string;
+      testCategoryType: string;
+      parentId: number;
+      language: string;
+      isActive: number;
+      createdBy: string;
+      createdDate: string;
+      modifiedBy: string;
+      modifiedDate: string;
+    }[]
+  >([]);
   const [difficulties, setDifficulties] = useState<SelectOption[]>([]);
-  const [instructionsList, setInstructionsList] = useState<SelectOption[]>([]);
-  const [secondaryTypes, setSecondaryTypes] = useState<SelectOption[]>([]);
+  const [instructionsList, setInstructionsList] = useState<
+    {
+      testInstructionId: number;
+      testInstructionName: string;
+      testInstruction1: string;
+      language: string;
+      isActive: number;
+      createdBy: string;
+      createdDate: string;
+      modifiedBy: string;
+      modifiedDate: string;
+    }[]
+  >([]);
+
+  // --- NEW: async fetchers for options ---
+
+  async function fetchTestTypes() {
+    try {
+      const res = await fetch(
+        "https://evalusserver1.thoughtprotraining.com:8443/api/TestTypes?includeInactive=false&language=English"
+      );
+      const data = await res.json();
+      setTestTypes(data.data);
+    } catch (err) {
+      setTestTypes([]);
+    }
+  }
+
+  async function fetchCategories() {
+    try {
+      const res = await fetch(
+        "https://evalusserver1.thoughtprotraining.com:8443/api/TestCategories?includeInactive=false&language=English"
+      );
+      const data = await res.json();
+      console.log({ data });
+      setCategories(data.data);
+    } catch (err) {
+      setCategories([]);
+    }
+  }
+
+  async function fetchInstructions() {
+    try {
+      const res = await fetch(
+        "https://evalusserver1.thoughtprotraining.com:8443/api/TestInstructions?includeInactive=false&language=English"
+      );
+      const data = await res.json();
+      console.log({ data });
+      setInstructionsList(data.data);
+    } catch (err) {
+      setInstructionsList([]);
+    }
+  }
+
+  async function fetchDifficulties() {
+    try {
+      const res = await fetch(
+        "https://evalusserver1.thoughtprotraining.com:8443/api/TestDifficultyLevels?includeInactive=false&language=English"
+      );
+      const data = await res.json();
+      setDifficulties(data.data);
+    } catch (err) {
+      setDifficulties([]);
+    }
+  }
 
   useEffect(() => {
-    // Mock fetching options from API
-    const fetchOptions = async () => {
-      // Replace with real API calls
-      setTestTypes([
-        { value: "objective", label: "Objective" },
-        { value: "subjective", label: "Subjective" },
-      ]);
-      setCategories([
-        { value: "math", label: "Math" },
-        { value: "science", label: "Science" },
-      ]);
-      setInstructionsList([
-        { value: "open_book", label: "Open Book" },
-        { value: "closed_book", label: "Closed Book" },
-      ]);
-      setDifficulties([
-        { value: "easy", label: "Easy" },
-        { value: "medium", label: "Medium" },
-        { value: "hard", label: "Hard" },
-      ]);
-      setSecondaryTypes([
-        { value: "demo", label: "Demo Test" },
-        { value: "practice", label: "Practice Test" },
-      ]);
-    };
-
-    fetchOptions();
+    // Call all fetchers
+    fetchTestTypes();
+    fetchCategories();
+    fetchInstructions();
+    fetchDifficulties();
   }, []);
+
+  // ...rest of your component (validation, handleChange etc.) remain unchanged
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
@@ -79,7 +145,6 @@ const App: React.FC<{ title: string }> = () => {
 
   const createTest = async () => {
     if (!validate()) return;
-
     const result = await checkFormat();
     if (!result.success) {
       setMessage(result.message || "An unknown error occurred.");
@@ -98,7 +163,6 @@ const App: React.FC<{ title: string }> = () => {
         totalQuestions: "",
         totalMarks: "",
         difficulty: "",
-        secondaryTestType: "",
       });
     }
   };
@@ -152,16 +216,35 @@ const App: React.FC<{ title: string }> = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {renderInput("testName", "Test Name")}
-        {renderSelect("testType", "Test Type", testTypes)}
+        {renderSelect(
+          "testType",
+          "Test Type",
+          testTypes.map((testType) => ({
+            label: testType.testType1,
+            value: testType.testTypeId.toString(),
+          }))
+        )}
         {renderInput("testCode", "Test Code")}
-        {renderSelect("category", "Category", categories)}
-        {renderSelect("instructions", "Instructions", instructionsList)}
+        {renderSelect(
+          "category",
+          "Category",
+          categories.map((cat) => {
+            return { value: cat.testCategoryId.toString(), label: cat.testCategoryName };
+          })
+        )}
+        {renderSelect(
+          "instructions",
+          "Instructions",
+          instructionsList.map((inst) => ({
+            value: inst.testInstructionId.toString(),
+            label: inst.testInstructionName,
+          }))
+        )}
         {renderInput("duration", "Duration (min)", "number")}
         {renderInput("handicappedDuration", "Handicapped Duration (min)", "number")}
         {renderInput("totalQuestions", "Total Questions", "number")}
         {renderInput("totalMarks", "Total Marks", "number")}
         {renderSelect("difficulty", "Difficulty", difficulties)}
-        {renderSelect("secondaryTestType", "Secondary Test Type", secondaryTypes)}
       </div>
 
       {message && (
