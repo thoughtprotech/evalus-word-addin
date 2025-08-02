@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { checkFormat } from "../../commands/commands";
 
 interface SelectOption {
@@ -31,6 +31,32 @@ const App: React.FC<{ title: string }> = () => {
   const [difficulties, setDifficulties] = useState<SelectOption[]>([]);
   const [instructionsList, setInstructionsList] = useState<SelectOption[]>([]);
   const [secondaryTypes, setSecondaryTypes] = useState<SelectOption[]>([]);
+
+  const dialogRef = useRef<Office.Dialog | null>(null);
+
+  const openDialog = (payload: string) => {
+    Office.context.ui.displayDialogAsync(
+      window.location.origin + "/dialog.html",
+      { height: 200, width: 500 },
+      (result) => {
+        if (result.status === Office.AsyncResultStatus.Succeeded) {
+          dialogRef.current = result.value;
+
+          // Setup listener for messages from dialog
+          dialogRef.current.addEventHandler(Office.EventType.DialogMessageReceived, (arg) => {
+            if ("message" in arg && arg.message === "dialogReady") {
+              dialogRef.current?.messageChild(payload);
+            }
+          });
+
+          // Optionally, handle dialog closed event here as well
+        } else {
+          // Handle dialog open errors if needed
+          console.error("Failed to open dialog:", result.error);
+        }
+      }
+    );
+  };
 
   useEffect(() => {
     // Mock fetching options from API
@@ -87,6 +113,9 @@ const App: React.FC<{ title: string }> = () => {
     } else {
       setMessage(result.message);
       setIsError(false);
+
+      const payload = JSON.stringify(form);
+
       setForm({
         testName: "",
         testType: "",
@@ -100,6 +129,7 @@ const App: React.FC<{ title: string }> = () => {
         difficulty: "",
         secondaryTestType: "",
       });
+      openDialog(payload);
     }
   };
 

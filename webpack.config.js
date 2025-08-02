@@ -25,6 +25,10 @@ module.exports = async (env, options) => {
         dependOn: "react",
       },
       commands: "./src/commands/commands.ts",
+      dialog: {
+        import: "./src/dialog/dialogIndex.tsx",
+        dependOn: "react",
+      },
     },
     output: {
       clean: true,
@@ -90,6 +94,11 @@ module.exports = async (env, options) => {
         template: "./src/commands/commands.html",
         chunks: ["polyfill", "commands"],
       }),
+      new HtmlWebpackPlugin({
+        filename: "dialog.html",
+        template: "./src/dialog/dialog.html",
+        chunks: ["polyfill", "dialog", "react"],
+      }),
       new webpack.ProvidePlugin({
         Promise: ["es6-promise", "Promise"],
       }),
@@ -101,7 +110,10 @@ module.exports = async (env, options) => {
       },
       server: {
         type: "https",
-        options: env.WEBPACK_BUILD || options.https !== undefined ? options.https : await getHttpsOptions(),
+        options:
+          env.WEBPACK_BUILD || options.https !== undefined
+            ? options.https
+            : await getHttpsOptions(),
       },
       port: process.env.npm_package_config_dev_server_port || 3000,
     },
