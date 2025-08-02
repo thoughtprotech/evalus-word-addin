@@ -32,29 +32,28 @@ const Dialog = () => {
     Office.onReady(() => {
       Office.context.ui.messageParent("dialogReady");
 
-      Office.context.ui.addHandlerAsync(
-        Office.EventType.DialogParentMessageReceived,
-        (arg) => {
-          try {
-            const received = JSON.parse(arg.message);
-            const formData: FormData = JSON.parse(received.form);
-            const questions: Question[] = JSON.parse(received.questions);
-            setFormData(formData);
-            setQuestions(questions);
-            setValidationErrors(null);
-          } catch {
-            setFormData(null);
-            setQuestions([]);
-            setValidationErrors(null);
-          }
+      Office.context.ui.addHandlerAsync(Office.EventType.DialogParentMessageReceived, (arg) => {
+        try {
+          const received = JSON.parse(arg.message);
+          const formData: FormData = JSON.parse(received.form);
+          const questions: Question[] = JSON.parse(received.questions);
+          setFormData(formData);
+          setQuestions(questions);
+          setValidationErrors(null);
+        } catch {
+          setFormData(null);
+          setQuestions([]);
+          setValidationErrors(null);
         }
-      );
+      });
     });
   }, []);
 
-  // Validation function returns string error or null if valid
+  // Validation function updated to handle question count >= 1
   const validateAll = (): string | null => {
     if (!formData) return "Form data is missing.";
+
+    if (questions.length === 0) return "At least one question is required.";
 
     for (let i = 0; i < questions.length; i++) {
       const q = questions[i];
@@ -71,7 +70,6 @@ const Dialog = () => {
       if (q.answer.length === 0) {
         return `Question ${q.questionNumber}: Please select at least one answer.`;
       }
-      // Answer letters must correspond to existing option indices
       for (const ans of q.answer) {
         const idx = ans.charCodeAt(0) - 97;
         if (idx < 0 || idx >= q.options.length) {
@@ -94,11 +92,7 @@ const Dialog = () => {
   };
 
   // Update a question field (question or solution)
-  const handleQuestionChange = (
-    index: number,
-    field: "question" | "solution",
-    value: string
-  ) => {
+  const handleQuestionChange = (index: number, field: "question" | "solution", value: string) => {
     setQuestions((prev) => {
       const newQs = [...prev];
       newQs[index] = { ...newQs[index], [field]: value };
@@ -123,10 +117,7 @@ const Dialog = () => {
       const oldOptions = [...newQs[qIndex].options];
       if (oldOptions.length <= 1) return newQs; // Don't remove last option
       oldOptions.splice(optIndex, 1);
-      let newAnswers = newQs[qIndex].answer.filter(
-        (ans) => ans.charCodeAt(0) - 97 !== optIndex
-      );
-      // Adjust answers for shifted indices after removal
+      let newAnswers = newQs[qIndex].answer.filter((ans) => ans.charCodeAt(0) - 97 !== optIndex);
       newAnswers = newAnswers.map((ans) => {
         const idx = ans.charCodeAt(0) - 97;
         return idx > optIndex ? String.fromCharCode(ans.charCodeAt(0) - 1) : ans;
@@ -141,11 +132,7 @@ const Dialog = () => {
   };
 
   // Update option text
-  const handleOptionChange = (
-    qIndex: number,
-    optIndex: number,
-    value: string
-  ) => {
+  const handleOptionChange = (qIndex: number, optIndex: number, value: string) => {
     setQuestions((prev) => {
       const newQs = [...prev];
       const newOptions = [...newQs[qIndex].options];
@@ -164,13 +151,39 @@ const Dialog = () => {
     });
   };
 
+  // Add new question with default values
+  const addQuestion = () => {
+    setQuestions((prev) => {
+      const newQuestionNumber = prev.length > 0 ? prev[prev.length - 1].questionNumber + 1 : 1;
+      const newQs = [
+        ...prev,
+        {
+          questionNumber: newQuestionNumber,
+          question: "",
+          options: [""],
+          answer: [],
+          solution: "",
+        },
+      ];
+      return newQs;
+    });
+  };
+
+  // Remove question by index, and adjust question numbers accordingly
+  const removeQuestion = (index: number) => {
+    setQuestions((prev) => {
+      if (prev.length <= 1) return prev; // Must keep at least one question
+      const newQs = prev.filter((_, i) => i !== index);
+      // Re-assign question numbers sequentially from 1
+      return newQs.map((q, i) => ({ ...q, questionNumber: i + 1 }));
+    });
+  };
+
   return (
     <div className="p-6 bg-white rounded-lg shadow-lg w-full h-screen mx-auto font-sans">
       {/* Submit button moved to top */}
       <div className="flex justify-between items-center mb-4 border-b border-b-indigo-200">
-        <h1 className="text-3xl font-bold text-indigo-700 pb-2">
-          Test Preview
-        </h1>
+        <h1 className="text-3xl font-bold text-indigo-700 pb-2">Test Preview</h1>
         <button
           onClick={handleSubmit}
           className="px-6 py-1 font-bold bg-indigo-600 text-white rounded-md shadow hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -207,11 +220,21 @@ const Dialog = () => {
             ))}
           </section>
 
-          {/* Editable Questions Table */}
+          {/* Editable Questions Table with Add/Remove Question */}
           <section className="mb-8">
-            <h2 className="text-xl font-semibold mb-4 text-indigo-600 border-b border-indigo-200 pb-1">
-              Extracted Questions
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-indigo-600 border-b border-indigo-200 pb-1">
+                Extracted Questions
+              </h2>
+              <button
+                type="button"
+                onClick={addQuestion}
+                className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded text-sm hover:bg-indigo-200"
+              >
+                + Add Question
+              </button>
+            </div>
+
             {questions.length === 0 ? (
               <p className="text-gray-500">No questions extracted from the document.</p>
             ) : (
@@ -233,6 +256,9 @@ const Dialog = () => {
                       </th>
                       <th className="px-5 py-3 text-left text-xs font-semibold text-indigo-700 tracking-wider">
                         Solution
+                      </th>
+                      <th className="px-5 py-3 text-left text-xs font-semibold text-indigo-700 tracking-wider">
+                        Action
                       </th>
                     </tr>
                   </thead>
@@ -261,9 +287,7 @@ const Dialog = () => {
                               <input
                                 type="text"
                                 value={opt}
-                                onChange={(e) =>
-                                  handleOptionChange(qIndex, optIdx, e.target.value)
-                                }
+                                onChange={(e) => handleOptionChange(qIndex, optIdx, e.target.value)}
                                 className="flex-grow border border-gray-300 rounded p-1 text-sm"
                               />
                               <button
@@ -315,6 +339,21 @@ const Dialog = () => {
                             className="w-full border border-gray-300 rounded p-1 italic resize-y"
                             rows={2}
                           />
+                        </td>
+                        <td className="px-5 py-3">
+                          <button
+                            type="button"
+                            onClick={() => removeQuestion(qIndex)}
+                            className="text-red-600 hover:text-red-700 font-bold px-3 py-1 rounded border border-red-600"
+                            disabled={questions.length <= 1}
+                            title={
+                              questions.length <= 1
+                                ? "At least one question required"
+                                : "Remove question"
+                            }
+                          >
+                            Remove
+                          </button>
                         </td>
                       </tr>
                     ))}
