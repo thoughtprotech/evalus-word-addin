@@ -34,24 +34,24 @@ const App: React.FC<{ title: string }> = () => {
 
   const dialogRef = useRef<Office.Dialog | null>(null);
 
-  const openDialog = (payload: string) => {
+  const openDialog = (formPayload: string, questionsPayload: string) => {
     Office.context.ui.displayDialogAsync(
       window.location.origin + "/dialog.html",
-      { height: 200, width: 500 },
+      { height: 200, width: 300 },
       (result) => {
         if (result.status === Office.AsyncResultStatus.Succeeded) {
           dialogRef.current = result.value;
 
-          // Setup listener for messages from dialog
           dialogRef.current.addEventHandler(Office.EventType.DialogMessageReceived, (arg) => {
             if ("message" in arg && arg.message === "dialogReady") {
-              dialogRef.current?.messageChild(payload);
+              dialogRef.current?.messageChild(
+                JSON.stringify({ form: formPayload, questions: questionsPayload })
+              );
             }
           });
 
-          // Optionally, handle dialog closed event here as well
+          // Optional: event handler for dialog closed can be added here
         } else {
-          // Handle dialog open errors if needed
           console.error("Failed to open dialog:", result.error);
         }
       }
@@ -110,27 +110,39 @@ const App: React.FC<{ title: string }> = () => {
     if (!result.success) {
       setMessage(result.message || "An unknown error occurred.");
       setIsError(true);
-    } else {
-      setMessage(result.message);
-      setIsError(false);
-
-      const payload = JSON.stringify(form);
-
-      setForm({
-        testName: "",
-        testType: "",
-        testCode: "",
-        category: "",
-        instructions: "",
-        duration: "",
-        handicappedDuration: "",
-        totalQuestions: "",
-        totalMarks: "",
-        difficulty: "",
-        secondaryTestType: "",
-      });
-      openDialog(payload);
+      return;
     }
+
+    setMessage(result.message);
+    setIsError(false);
+
+    const formPayload = JSON.stringify(form);
+
+    let questionsPayload = "[]"; // fallback empty JSON array string
+    try {
+      const storedQuestions = await OfficeRuntime.storage.getItem("lastExtractedJson");
+      if (storedQuestions) {
+        questionsPayload = storedQuestions;
+      }
+    } catch {
+      // Storage not available or failed, fallback to empty
+    }
+
+    setForm({
+      testName: "",
+      testType: "",
+      testCode: "",
+      category: "",
+      instructions: "",
+      duration: "",
+      handicappedDuration: "",
+      totalQuestions: "",
+      totalMarks: "",
+      difficulty: "",
+      secondaryTestType: "",
+    });
+
+    openDialog(formPayload, questionsPayload);
   };
 
   const renderInput = (name: string, label: string, type: "text" | "number" = "text") => (
