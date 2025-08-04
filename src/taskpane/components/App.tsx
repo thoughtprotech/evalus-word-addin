@@ -51,7 +51,12 @@ const App: React.FC<{ title: string }> = () => {
       modifiedDate: string;
     }[]
   >([]);
-  const [difficulties, setDifficulties] = useState<SelectOption[]>([]);
+  const [difficulties, setDifficulties] = useState<
+    {
+      difficultyLevelId: number;
+      difficulty: string;
+    }[]
+  >([]);
   const [instructionsList, setInstructionsList] = useState<
     {
       testInstructionId: number;
@@ -112,7 +117,7 @@ const App: React.FC<{ title: string }> = () => {
         "https://evalusserver1.thoughtprotraining.com:8443/api/TestDifficultyLevels?includeInactive=false&language=English"
       );
       const data = await res.json();
-      setDifficulties(data.data);
+      setDifficulties(data.data || []);
     } catch (err) {
       setDifficulties([]);
     }
@@ -204,7 +209,6 @@ const App: React.FC<{ title: string }> = () => {
       totalQuestions: "",
       totalMarks: "",
       difficulty: "",
-      secondaryTestType: "",
     });
 
     openDialog(formPayload, questionsPayload);
@@ -287,7 +291,13 @@ const App: React.FC<{ title: string }> = () => {
         {renderInput("handicappedDuration", "Handicapped Duration (min)", "number")}
         {renderInput("totalQuestions", "Total Questions", "number")}
         {renderInput("totalMarks", "Total Marks", "number")}
-        {renderSelect("difficulty", "Difficulty", difficulties)}
+        {renderSelect(
+          "difficulty",
+          "Difficulty",
+          difficulties.map((diff) => {
+            return { value: diff.difficultyLevelId.toString(), label: diff.difficulty };
+          })
+        )}
       </div>
 
       {message && (
