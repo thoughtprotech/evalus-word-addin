@@ -22,6 +22,7 @@ interface Question {
   answer: string[];
   solution: string;
   questionDifficultyId?: number;
+  allowCandidateComments?: boolean;
 }
 
 interface Difficulty {
@@ -222,6 +223,7 @@ const Dialog = () => {
               ...q,
               questionDifficultyId:
                 q.questionDifficultyId ?? difficulties[0].questionDifficultylevelId,
+              allowCandidateComments: q.allowCandidateComments ?? false,
             }));
           }
           setFormData(formData);
@@ -235,6 +237,14 @@ const Dialog = () => {
       });
     });
   }, [difficulties]);
+
+  const handleAllowCommentsChange = (qIndex: number) => {
+    setQuestions((prev) => {
+      const newQs = [...prev];
+      newQs[qIndex].allowCandidateComments = !newQs[qIndex].allowCandidateComments;
+      return newQs;
+    });
+  };
 
   const validateAll = (): string | null => {
     if (!formData) return "Form data is missing.";
@@ -275,8 +285,11 @@ const Dialog = () => {
         negativeMarks: Number(negativeMarks),
         graceMarks: Number(graceMarks),
         language,
-        // other fields can be added as necessary
         questionDifficultyLevelId: q.questionDifficultyId,
+        // sectionId: 0,
+        allowCandidateComments: q.allowCandidateComments,
+        // questionTypeId: 0,
+        // subjectId: 0
       })),
     };
 
@@ -374,6 +387,7 @@ const Dialog = () => {
         solution: "",
         questionDifficultyId:
           difficulties.length > 0 ? difficulties[0].questionDifficultylevelId : undefined,
+        allowCandidateComments: false,
       },
     ]);
   };
@@ -575,6 +589,7 @@ const Dialog = () => {
                   <th className="px-4 py-3">Answer(s)</th>
                   <th className="px-4 py-3">Difficulty</th>
                   <th className="px-4 py-3">Solution</th>
+                  <th className="px-4 py-3">Allow Comments</th>
                   <th className="px-4 py-3">Action</th>
                 </tr>
               </thead>
@@ -661,6 +676,15 @@ const Dialog = () => {
                         className="w-full border rounded p-2 text-sm"
                       />
                     </td>
+                    <td className="px-4 py-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={q.allowCandidateComments || false}
+                        onChange={() => handleAllowCommentsChange(qIndex)}
+                        className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                      />
+                    </td>
+
                     <td className="px-4 py-3 text-center">
                       <button
                         onClick={() => removeQuestion(qIndex)}
