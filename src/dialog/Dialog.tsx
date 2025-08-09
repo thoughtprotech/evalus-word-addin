@@ -286,10 +286,10 @@ const Dialog = () => {
         graceMarks: Number(graceMarks),
         language,
         questionDifficultyLevelId: q.questionDifficultyId,
-        // sectionId: 0,
+        sectionId: 2,
         allowCandidateComments: q.allowCandidateComments,
-        // questionTypeId: 0,
-        // subjectId: 0
+        questionTypeId: 1,
+        subjectId: 2
       })),
     };
 
