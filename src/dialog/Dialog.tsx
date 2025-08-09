@@ -138,7 +138,15 @@ const Dialog = () => {
         options: q.options,
         answer: q.answer,
         solution: q.solution,
+        // questionTypeId: 0,
+        // subjectId: 0,
+        // marks: 0
+        // negativeMarks: 0
+        // graceMarks: 0,
         questionDifficultyLevelId: q.questionDifficultyId,
+        // sectionId: 0,
+        // language: "",
+        // allowCandidateComments: true
       })),
     };
 
