@@ -137,6 +137,9 @@ const App: React.FC<{ title: string }> = () => {
                 JSON.stringify({ form: formPayload, questions: questionsPayload })
               );
             }
+            if ("message" in arg && arg.message === "closeDialog") {
+              dialogRef.current?.close();
+            }
           });
 
           // Optional: event handler for dialog closed can be added here
@@ -293,7 +296,10 @@ const App: React.FC<{ title: string }> = () => {
           "testDifficultyLevel1",
           "Difficulty",
           difficulties.map((diff) => {
-            return { value: diff.testDifficultyLevelId.toString(), label: diff.testDifficultyLevel1 };
+            return {
+              value: diff.testDifficultyLevelId.toString(),
+              label: diff.testDifficultyLevel1,
+            };
           })
         )}
       </div>

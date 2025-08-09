@@ -289,7 +289,7 @@ const Dialog = () => {
         sectionId: 2,
         allowCandidateComments: q.allowCandidateComments,
         questionTypeId: 1,
-        subjectId: 2
+        subjectId: 6,
       })),
     };
 
@@ -312,6 +312,7 @@ const Dialog = () => {
         }
         const data = await res.json();
         console.log("Test created successfully:", data);
+        Office.context.ui.messageParent("closeDialog");
       } catch (err) {
         console.error("Failed to create test:", err);
       }
