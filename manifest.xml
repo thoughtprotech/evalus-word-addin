@@ -95,8 +95,8 @@
       </bt:Urls>
       <bt:ShortStrings>
         <bt:String id="GetStarted.Title" DefaultValue="Get started with your sample add-in!" />
-        <bt:String id="CommandsGroup.Label" DefaultValue="Commands Group" />
-        <bt:String id="TaskpaneButton.Label" DefaultValue="Show Task Pane" />
+        <bt:String id="CommandsGroup.Label" DefaultValue="Evalus Admin" />
+        <bt:String id="TaskpaneButton.Label" DefaultValue="Test Panel" />
         <bt:String id="CheckFormatButton.Label" DefaultValue="Check Format" />
       </bt:ShortStrings>
       <bt:LongStrings>

@@ -17,7 +17,7 @@ const App: React.FC<{ title: string }> = () => {
     handicappedDuration: "",
     totalQuestions: "",
     totalMarks: "",
-    difficulty: "",
+    testDifficultyLevel1: "",
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -53,8 +53,8 @@ const App: React.FC<{ title: string }> = () => {
   >([]);
   const [difficulties, setDifficulties] = useState<
     {
-      difficultyLevelId: number;
-      difficulty: string;
+      testDifficultyLevelId: number;
+      testDifficultyLevel1: string;
     }[]
   >([]);
   const [instructionsList, setInstructionsList] = useState<
@@ -76,7 +76,7 @@ const App: React.FC<{ title: string }> = () => {
   async function fetchTestTypes() {
     try {
       const res = await fetch(
-        "https://evalusserver1.thoughtprotraining.com:8443/api/TestTypes?includeInactive=false&language=English"
+        "https://evalusdevapi.thoughtprotraining.com/api/TestTypes?includeInactive=false&language=English"
       );
       const data = await res.json();
       setTestTypes(data.data);
@@ -88,10 +88,9 @@ const App: React.FC<{ title: string }> = () => {
   async function fetchCategories() {
     try {
       const res = await fetch(
-        "https://evalusserver1.thoughtprotraining.com:8443/api/TestCategories?includeInactive=false&language=English"
+        "https://evalusdevapi.thoughtprotraining.com/api/TestCategories?includeInactive=false&language=English"
       );
       const data = await res.json();
-      console.log({ data });
       setCategories(data.data);
     } catch (err) {
       setCategories([]);
@@ -101,10 +100,9 @@ const App: React.FC<{ title: string }> = () => {
   async function fetchInstructions() {
     try {
       const res = await fetch(
-        "https://evalusserver1.thoughtprotraining.com:8443/api/TestInstructions?includeInactive=false&language=English"
+        "https://evalusdevapi.thoughtprotraining.com/api/TestInstructions?includeInactive=false&language=English"
       );
       const data = await res.json();
-      console.log({ data });
       setInstructionsList(data.data);
     } catch (err) {
       setInstructionsList([]);
@@ -114,7 +112,7 @@ const App: React.FC<{ title: string }> = () => {
   async function fetchDifficulties() {
     try {
       const res = await fetch(
-        "https://evalusserver1.thoughtprotraining.com:8443/api/TestDifficultyLevels?includeInactive=false&language=English"
+        "https://evalusdevapi.thoughtprotraining.com/api/TestDifficultyLevels?includeInactive=false"
       );
       const data = await res.json();
       setDifficulties(data.data || []);
@@ -208,7 +206,7 @@ const App: React.FC<{ title: string }> = () => {
       handicappedDuration: "",
       totalQuestions: "",
       totalMarks: "",
-      difficulty: "",
+      testDifficultyLevel1: "",
     });
 
     openDialog(formPayload, questionsPayload);
@@ -268,7 +266,7 @@ const App: React.FC<{ title: string }> = () => {
           "Test Type",
           testTypes.map((testType) => ({
             label: testType.testType1,
-            value: testType.testTypeId.toString(),
+            value: testType.testTypeId?.toString(),
           }))
         )}
         {renderInput("testCode", "Test Code")}
@@ -292,10 +290,10 @@ const App: React.FC<{ title: string }> = () => {
         {renderInput("totalQuestions", "Total Questions", "number")}
         {renderInput("totalMarks", "Total Marks", "number")}
         {renderSelect(
-          "difficulty",
+          "testDifficultyLevel1",
           "Difficulty",
           difficulties.map((diff) => {
-            return { value: diff.difficultyLevelId.toString(), label: diff.difficulty };
+            return { value: diff.testDifficultyLevelId.toString(), label: diff.testDifficultyLevel1 };
           })
         )}
       </div>
