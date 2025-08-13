@@ -6,7 +6,41 @@ interface SelectOption {
   label: string;
 }
 
-const App: React.FC<{ title: string }> = () => {
+/* -------------------------
+   Start Page Component
+------------------------- */
+const StartPage: React.FC<{
+  onCreateTest: () => void;
+  onCreateQuestions: () => void;
+}> = ({ onCreateTest, onCreateQuestions }) => {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-6 space-y-6">
+      <h1 className="text-3xl font-bold text-gray-700 mb-8">
+        Evalus Portal
+      </h1>
+      <div className="grid grid-cols-1 gap-4 w-full max-w-sm">
+        <button
+          onClick={onCreateTest}
+          className="w-full px-6 py-4 bg-indigo-600 text-white text-lg font-semibold rounded-xl shadow hover:bg-indigo-700 transition"
+        >
+          Create Test
+        </button>
+        <button
+          onClick={onCreateQuestions}
+          className="w-full px-6 py-4 bg-green-600 text-white text-lg font-semibold rounded-xl shadow hover:bg-green-700 transition"
+        >
+          Create Questions
+        </button>
+      </div>
+    </div>
+  );
+};
+
+/* -------------------------
+   Test Creation Form
+   (Your existing App logic)
+------------------------- */
+const TestCreationForm = ({ }) => {
   const [form, setForm] = useState({
     testName: "",
     testType: "",
@@ -24,54 +58,13 @@ const App: React.FC<{ title: string }> = () => {
   const [message, setMessage] = useState<string | null>(null);
   const [isError, setIsError] = useState(false);
 
-  // Dropdown options (fetched from API)
-  const [testTypes, setTestTypes] = useState<
-    {
-      testTypeId: number;
-      testType1: string;
-      language: string;
-      isActive: number;
-      createdBy: string;
-      createdDate: string;
-      modifiedBy: string;
-      modifiedDate: string;
-    }[]
-  >([]);
-  const [categories, setCategories] = useState<
-    {
-      testCategoryId: number;
-      testCategoryName: string;
-      testCategoryType: string;
-      parentId: number;
-      language: string;
-      isActive: number;
-      createdBy: string;
-      createdDate: string;
-      modifiedBy: string;
-      modifiedDate: string;
-    }[]
-  >([]);
-  const [difficulties, setDifficulties] = useState<
-    {
-      testDifficultyLevelId: number;
-      testDifficultyLevel1: string;
-    }[]
-  >([]);
-  const [instructionsList, setInstructionsList] = useState<
-    {
-      testInstructionId: number;
-      testInstructionName: string;
-      testInstruction1: string;
-      language: string;
-      isActive: number;
-      createdBy: string;
-      createdDate: string;
-      modifiedBy: string;
-      modifiedDate: string;
-    }[]
-  >([]);
+  // Dropdown options
+  const [testTypes, setTestTypes] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [difficulties, setDifficulties] = useState<any[]>([]);
+  const [instructionsList, setInstructionsList] = useState<any[]>([]);
 
-  // --- NEW: async fetchers for options ---
+  const dialogRef = useRef<Office.Dialog | null>(null);
 
   async function fetchTestTypes() {
     try {
@@ -80,11 +73,10 @@ const App: React.FC<{ title: string }> = () => {
       );
       const data = await res.json();
       setTestTypes(data.data);
-    } catch (err) {
+    } catch {
       setTestTypes([]);
     }
   }
-
   async function fetchCategories() {
     try {
       const res = await fetch(
@@ -92,11 +84,10 @@ const App: React.FC<{ title: string }> = () => {
       );
       const data = await res.json();
       setCategories(data.data);
-    } catch (err) {
+    } catch {
       setCategories([]);
     }
   }
-
   async function fetchInstructions() {
     try {
       const res = await fetch(
@@ -104,11 +95,10 @@ const App: React.FC<{ title: string }> = () => {
       );
       const data = await res.json();
       setInstructionsList(data.data);
-    } catch (err) {
+    } catch {
       setInstructionsList([]);
     }
   }
-
   async function fetchDifficulties() {
     try {
       const res = await fetch(
@@ -116,12 +106,17 @@ const App: React.FC<{ title: string }> = () => {
       );
       const data = await res.json();
       setDifficulties(data.data || []);
-    } catch (err) {
+    } catch {
       setDifficulties([]);
     }
   }
 
-  const dialogRef = useRef<Office.Dialog | null>(null);
+  useEffect(() => {
+    fetchTestTypes();
+    fetchCategories();
+    fetchInstructions();
+    fetchDifficulties();
+  }, []);
 
   const openDialog = (formPayload: string, questionsPayload: string) => {
     Office.context.ui.displayDialogAsync(
@@ -130,7 +125,6 @@ const App: React.FC<{ title: string }> = () => {
       (result) => {
         if (result.status === Office.AsyncResultStatus.Succeeded) {
           dialogRef.current = result.value;
-
           dialogRef.current.addEventHandler(Office.EventType.DialogMessageReceived, (arg) => {
             if ("message" in arg && arg.message === "dialogReady") {
               dialogRef.current?.messageChild(
@@ -141,24 +135,12 @@ const App: React.FC<{ title: string }> = () => {
               dialogRef.current?.close();
             }
           });
-
-          // Optional: event handler for dialog closed can be added here
         } else {
           console.error("Failed to open dialog:", result.error);
         }
       }
     );
   };
-
-  useEffect(() => {
-    // Call all fetchers
-    fetchTestTypes();
-    fetchCategories();
-    fetchInstructions();
-    fetchDifficulties();
-  }, []);
-
-  // ...rest of your component (validation, handleChange etc.) remain unchanged
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
@@ -171,7 +153,9 @@ const App: React.FC<{ title: string }> = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
@@ -189,14 +173,14 @@ const App: React.FC<{ title: string }> = () => {
 
     const formPayload = JSON.stringify(form);
 
-    let questionsPayload = "[]"; // fallback empty JSON array string
+    let questionsPayload = "[]";
     try {
       const storedQuestions = await OfficeRuntime.storage.getItem("lastExtractedJson");
       if (storedQuestions) {
         questionsPayload = storedQuestions;
       }
     } catch {
-      // Storage not available or failed, fallback to empty
+      // ignore
     }
 
     setForm({
@@ -217,9 +201,7 @@ const App: React.FC<{ title: string }> = () => {
 
   const renderInput = (name: string, label: string, type: "text" | "number" = "text") => (
     <div className="flex flex-col">
-      <label htmlFor={name} className="font-semibold">
-        {label}
-      </label>
+      <label htmlFor={name} className="font-semibold">{label}</label>
       <input
         type={type}
         name={name}
@@ -234,9 +216,7 @@ const App: React.FC<{ title: string }> = () => {
 
   const renderSelect = (name: string, label: string, options: SelectOption[]) => (
     <div className="flex flex-col">
-      <label htmlFor={name} className="font-semibold">
-        {label}
-      </label>
+      <label htmlFor={name} className="font-semibold">{label}</label>
       <select
         name={name}
         id={name}
@@ -246,9 +226,7 @@ const App: React.FC<{ title: string }> = () => {
       >
         <option value="">-- Select --</option>
         {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
+          <option key={opt.value} value={opt.value}>{opt.label}</option>
         ))}
       </select>
       {errors[name] && <span className="text-red-500 text-sm font-bold">{errors[name]}</span>}
@@ -258,8 +236,7 @@ const App: React.FC<{ title: string }> = () => {
   return (
     <div className="p-6 space-y-4">
       <h1 className="text-2xl font-bold border-b border-b-gray-300 pb-2 mb-4 text-gray-700">
-        <span className="text-indigo-500">E</span>
-        valus Test Creation Portal
+        <span className="text-indigo-500">E</span>valus Test Creation Portal
       </h1>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -267,26 +244,18 @@ const App: React.FC<{ title: string }> = () => {
         {renderSelect(
           "testType",
           "Test Type",
-          testTypes.map((testType) => ({
-            label: testType.testType1,
-            value: testType.testTypeId?.toString(),
-          }))
+          testTypes.map((t) => ({ label: t.testType1, value: t.testTypeId?.toString() }))
         )}
         {renderInput("testCode", "Test Code")}
         {renderSelect(
           "category",
           "Category",
-          categories.map((cat) => {
-            return { value: cat.testCategoryId.toString(), label: cat.testCategoryName };
-          })
+          categories.map((c) => ({ label: c.testCategoryName, value: c.testCategoryId.toString() }))
         )}
         {renderSelect(
           "instructions",
           "Instructions",
-          instructionsList.map((inst) => ({
-            value: inst.testInstructionId.toString(),
-            label: inst.testInstructionName,
-          }))
+          instructionsList.map((i) => ({ label: i.testInstructionName, value: i.testInstructionId.toString() }))
         )}
         {renderInput("duration", "Duration (min)", "number")}
         {renderInput("handicappedDuration", "Handicapped Duration (min)", "number")}
@@ -295,20 +264,16 @@ const App: React.FC<{ title: string }> = () => {
         {renderSelect(
           "testDifficultyLevel1",
           "Difficulty",
-          difficulties.map((diff) => {
-            return {
-              value: diff.testDifficultyLevelId.toString(),
-              label: diff.testDifficultyLevel1,
-            };
-          })
+          difficulties.map((d) => ({
+            label: d.testDifficultyLevel1,
+            value: d.testDifficultyLevelId.toString()
+          }))
         )}
       </div>
 
       {message && (
         <div
-          className={`p-3 rounded-lg ${
-            isError ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
-          }`}
+          className={`p-3 rounded-lg ${isError ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}
         >
           {message}
         </div>
@@ -324,4 +289,59 @@ const App: React.FC<{ title: string }> = () => {
   );
 };
 
-export default App;
+/* -------------------------
+   Main Container
+------------------------- */
+const MainContainer: React.FC = () => {
+  const [view, setView] = useState<"start" | "test">("start");
+  const dialogRef = useRef<Office.Dialog | null>(null);
+
+  const openQuestionDialog = async () => {
+    let questionsPayload = "[]";
+    try {
+      const storedQuestions = await OfficeRuntime.storage.getItem("lastExtractedJson");
+      if (storedQuestions) {
+        questionsPayload = storedQuestions;
+      }
+    } catch {
+      // ignore
+    }
+
+    Office.context.ui.displayDialogAsync(
+      window.location.origin + "/questionDialog.html",
+      { height: 200, width: 300 },
+      (result) => {
+        if (result.status === Office.AsyncResultStatus.Succeeded) {
+          dialogRef.current = result.value;
+          dialogRef.current.addEventHandler(Office.EventType.DialogMessageReceived, (arg) => {
+            if ("message" in arg && arg.message === "dialogReady") {
+              dialogRef.current?.messageChild(questionsPayload);
+            }
+            if ("message" in arg && arg.message === "closeDialog") {
+              dialogRef.current?.close();
+            }
+          });
+        } else {
+          console.error("Failed to open question dialog:", result.error);
+        }
+      }
+    );
+  };
+
+  if (view === "start") {
+    return (
+      <StartPage
+        onCreateTest={() => setView("test")}
+        onCreateQuestions={openQuestionDialog}
+      />
+    );
+  }
+
+  if (view === "test") {
+    return <TestCreationForm />;
+  }
+
+  return null;
+};
+
+export default MainContainer;
