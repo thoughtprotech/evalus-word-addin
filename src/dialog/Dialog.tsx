@@ -48,6 +48,11 @@ interface Question {
   options: string[];
   answer: string[];
   solution: string;
+  // HTML fields from extraction to preserve equations/formatting
+  questionHtml?: string;
+  optionsHtml?: string[];
+  answerHtml?: string;
+  solutionHtml?: string;
   questionDifficultyId?: number;
   allowCandidateComments?: boolean;
   marks: string;
@@ -214,6 +219,9 @@ function QuestionCard({
       {/* Question */}
       <div>
         <label className="block text-xs font-medium text-gray-700 mb-1">Question</label>
+        {q.questionHtml && (
+          <div className="border border-gray-200 rounded-md p-2 mb-2 bg-white overflow-auto" data-testid="question-html" dangerouslySetInnerHTML={{ __html: q.questionHtml }} />
+        )}
         <textarea
           value={q.question}
           onChange={(e) => handleQuestionChange(qIndex, "question", e.target.value)}
@@ -301,22 +309,31 @@ function QuestionCard({
           </div>
           <div className="space-y-1">
             {q.options.map((opt, optIdx) => (
-              <div key={optIdx} className="flex gap-2 items-center">
-                <input
-                  type="text"
-                  value={opt}
-                  onChange={(e) => handleOptionChange(qIndex, optIdx, e.target.value)}
-                  className="flex-grow border border-gray-300 rounded px-2 py-1 text-xs shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-100"
-                  placeholder={`Option ${String.fromCharCode(65 + optIdx)}`}
-                />
-                <button
-                  onClick={() => removeOption(qIndex, optIdx)}
-                  disabled={q.options.length <= 1}
-                  className="text-red-500 hover:text-red-700 disabled:opacity-40 cursor-pointer"
-                  title="Remove option"
-                >
-                  <MinusCircle size={13} />
-                </button>
+              <div key={optIdx} className="flex flex-col gap-1">
+                {q.optionsHtml && q.optionsHtml[optIdx] && (
+                  <div
+                    className="border border-gray-200 rounded-md p-2 bg-white overflow-auto"
+                    data-testid={`option-html-${optIdx}`}
+                    dangerouslySetInnerHTML={{ __html: q.optionsHtml[optIdx] as string }}
+                  />
+                )}
+                <div className="flex gap-2 items-center">
+                  <input
+                    type="text"
+                    value={opt}
+                    onChange={(e) => handleOptionChange(qIndex, optIdx, e.target.value)}
+                    className="flex-grow border border-gray-300 rounded px-2 py-1 text-xs shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-100"
+                    placeholder={`Option ${String.fromCharCode(65 + optIdx)}`}
+                  />
+                  <button
+                    onClick={() => removeOption(qIndex, optIdx)}
+                    disabled={q.options.length <= 1}
+                    className="text-red-500 hover:text-red-700 disabled:opacity-40 cursor-pointer"
+                    title="Remove option"
+                  >
+                    <MinusCircle size={13} />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -379,6 +396,9 @@ function QuestionCard({
       {/* Solution */}
       <div>
         <label className="block text-xs font-medium text-gray-600 mb-1">Solution</label>
+        {q.solutionHtml && (
+          <div className="border border-gray-200 rounded-md p-2 mb-2 bg-white overflow-auto" data-testid="solution-html" dangerouslySetInnerHTML={{ __html: q.solutionHtml }} />
+        )}
         <textarea
           value={q.solution}
           onChange={(e) => handleQuestionChange(qIndex, "solution", e.target.value)}
@@ -510,30 +530,35 @@ const Dialog = () => {
     Office.onReady(() => {
       Office.context.ui.messageParent("dialogReady");
       Office.context.ui.addHandlerAsync(Office.EventType.DialogParentMessageReceived, (arg) => {
-        try {
-          const received = JSON.parse(arg.message);
-          const formData: FormData = JSON.parse(received.form);
-          let qs: Question[] = JSON.parse(received.questions);
-          if (difficulties.length > 0 || languages.length > 0) {
-            qs = qs.map((q) => ({
-              ...q,
-              questionDifficultyId:
-                q.questionDifficultyId ?? difficulties[0]?.questionDifficultylevelId,
-              allowCandidateComments: q.allowCandidateComments ?? false,
-              marks: q.marks ?? "1",
-              negativeMarks: q.negativeMarks ?? "0",
-              graceMarks: q.graceMarks ?? "0",
-              language: q.language ?? languages[0]?.language ?? "",
-            }));
+        (async () => {
+          try {
+            const received = JSON.parse(arg.message);
+            const formData: FormData = JSON.parse(received.form);
+            let qs: Question[] = JSON.parse(received.questions);
+            // Normalize and default fields
+            if (difficulties.length > 0 || languages.length > 0) {
+              qs = qs.map((q) => ({
+                ...q,
+                questionDifficultyId:
+                  q.questionDifficultyId ?? difficulties[0]?.questionDifficultylevelId,
+                allowCandidateComments: q.allowCandidateComments ?? false,
+                marks: q.marks ?? "1",
+                negativeMarks: q.negativeMarks ?? "0",
+                graceMarks: q.graceMarks ?? "0",
+                language: q.language ?? languages[0]?.language ?? "",
+              }));
+            }
+            // Sanitize and inline images in HTML fields
+            qs = await inlineAllQuestionHtml(qs);
+            setFormData(formData);
+            setQuestions(qs);
+            setValidationErrors(null);
+          } catch {
+            setFormData(null);
+            setQuestions([]);
+            setValidationErrors(null);
           }
-          setFormData(formData);
-          setQuestions(qs);
-          setValidationErrors(null);
-        } catch {
-          setFormData(null);
-          setQuestions([]);
-          setValidationErrors(null);
-        }
+        })();
       });
     });
   }, [difficulties, languages]);
@@ -778,3 +803,67 @@ const Dialog = () => {
 };
 
 export default Dialog;
+
+// ---- HTML helpers: sanitize and inline images as data URLs ----
+async function inlineAllQuestionHtml(qs: Question[]): Promise<Question[]> {
+  const result: Question[] = [];
+  for (const q of qs) {
+    const questionHtml = q.questionHtml ? await sanitizeAndInlineImages(q.questionHtml) : q.questionHtml;
+    const optionsHtml = q.optionsHtml
+      ? await Promise.all(q.optionsHtml.map((h) => sanitizeAndInlineImages(h)))
+      : q.optionsHtml;
+    const answerHtml = q.answerHtml ? await sanitizeAndInlineImages(q.answerHtml) : q.answerHtml;
+    const solutionHtml = q.solutionHtml
+      ? await sanitizeAndInlineImages(q.solutionHtml)
+      : q.solutionHtml;
+    result.push({ ...q, questionHtml, optionsHtml, answerHtml, solutionHtml });
+  }
+  return result;
+}
+
+async function sanitizeAndInlineImages(html: string): Promise<string> {
+  if (!html) return html;
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  // Remove script tags
+  doc.querySelectorAll("script").forEach((el) => el.remove());
+  // Remove event handlers
+  doc.querySelectorAll("*").forEach((el) => {
+    for (const attr of Array.from(el.attributes)) {
+      if (/^on/i.test(attr.name)) el.removeAttribute(attr.name);
+    }
+  });
+  const imgs = Array.from(doc.images || []);
+  await Promise.all(
+    imgs.map(async (img) => {
+      const src = img.getAttribute("src") || "";
+      if (!src || src.startsWith("data:")) return;
+      try {
+        const dataUrl = await fetchToDataUrl(src);
+        if (dataUrl) img.setAttribute("src", dataUrl);
+      } catch {
+        // ignore fetch failures, keep original src
+      }
+    })
+  );
+  return doc.body.innerHTML;
+}
+
+async function fetchToDataUrl(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await blobToDataUrl(blob);
+  } catch {
+    return null;
+  }
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}

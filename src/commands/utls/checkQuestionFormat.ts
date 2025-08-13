@@ -8,7 +8,12 @@ export default async function checkFormatHelper(): Promise<{
       paras.load("items");
       await context.sync();
 
-      const lines = paras.items.map((p) => p.text.trim());
+  const lines = paras.items.map((p) => p.text.trim());
+
+  // Also get HTML per paragraph to preserve equations and rich content
+  const htmlResults = paras.items.map((p) => p.getRange().getHtml());
+  await context.sync();
+  const htmlLines = htmlResults.map((r) => (r?.value ?? "").trim());
       // Check if all lines are empty
       const nonEmptyLines = lines.filter((line) => line.length > 0);
       if (nonEmptyLines.length === 0) {
@@ -33,7 +38,7 @@ export default async function checkFormatHelper(): Promise<{
       await context.sync();
 
       if (invalidSet.size === 0) {
-        const questions = extractQuestions(lines);
+        const questions = extractQuestions(lines, htmlLines);
         await OfficeRuntime.storage.setItem("lastExtractedJson", JSON.stringify(questions));
         return { success: true };
       } else {
@@ -138,7 +143,7 @@ function findInvalidParagraphs(lines: string[]): number[] {
   return invalid;
 }
 
-function extractQuestions(lines: string[]) {
+function extractQuestions(lines: string[], htmlLines: string[]) {
   const questions: any[] = [];
   let i = 0;
   let qNum = 1;
@@ -159,14 +164,21 @@ function extractQuestions(lines: string[]) {
     const questionObj: any = {
       questionNumber: qNum,
       question: "",
+      questionHtml: "",
       options: [],
+      optionsHtml: [],
       answer: [],
+      answerHtml: "",
       solution: "",
+      solutionHtml: "",
     };
 
     const firstLineRemainder = qMatch.remainder?.trim() ?? "";
     const questionLines: string[] = [];
+    const questionHtmlParts: string[] = [];
     if (firstLineRemainder) questionLines.push(firstLineRemainder);
+    // Include full HTML of the first question line to preserve equations/formatting
+    questionHtmlParts.push(htmlLines[i] || "");
     i++;
 
     // Accumulate question text until we encounter options/answer/solution/next question
@@ -178,9 +190,11 @@ function extractQuestions(lines: string[]) {
       !matchQuestionStart(lines[i])
     ) {
       questionLines.push(lines[i].trim());
+      questionHtmlParts.push(htmlLines[i] || "");
       i++;
     }
     questionObj.question = questionLines.join(" ").trim();
+    questionObj.questionHtml = wrapHtmlBlock(questionHtmlParts);
 
     // Gather options (may be multiple per paragraph)
   const options: string[] = [];
@@ -193,16 +207,18 @@ function extractQuestions(lines: string[]) {
       const para = lines[i];
       const opts = splitOptionsFromParagraph(para);
       if (opts.length > 0) {
-    options.push(...opts.map((o) => o.text));
+        options.push(...opts.map((o) => o.text));
       }
       i++;
     }
     questionObj.options = options;
+    questionObj.optionsHtml = options.map((t) => `<p>${escapeHtml(t)}</p>`);
 
     // Answer
     if (i < lines.length && isAnswerLine(lines[i]).matched) {
       const ans = isAnswerLine(lines[i]);
       questionObj.answer = ans.letters;
+      questionObj.answerHtml = `<p>${escapeHtml(ans.tail)}</p>`;
       i++;
     }
 
@@ -210,6 +226,7 @@ function extractQuestions(lines: string[]) {
     if (i < lines.length && isSolutionLine(lines[i]).matched) {
       const sol = isSolutionLine(lines[i]);
       questionObj.solution = sol.text;
+      questionObj.solutionHtml = `<p>${escapeHtml(sol.text)}</p>`;
       i++;
     }
 
@@ -310,16 +327,32 @@ function containsAnyOption(text: string): boolean {
   );
 }
 
-function isAnswerLine(line: string): { matched: boolean; letters: string[] } {
+function isAnswerLine(line: string): { matched: boolean; letters: string[]; tail: string } {
   const m = line.match(/^(?:Ans(?:wer)?|Correct\s*Answer)\s*[\.:\-)]+\s*(.*)$/i);
-  if (!m) return { matched: false, letters: [] };
+  if (!m) return { matched: false, letters: [], tail: "" };
   const tail = (m[1] || "").trim();
-  const letters = Array.from(tail.matchAll(/[a-e]/gi)).map((x) => x[0].toLowerCase());
-  return { matched: true, letters };
+  const letters = Array.from(tail.matchAll(/[a-z]/gi)).map((x) => x[0].toLowerCase());
+  return { matched: true, letters, tail };
 }
 
 function isSolutionLine(line: string): { matched: boolean; text: string } {
   const m = line.match(/^(?:Sol(?:ution)?|Explanation)\s*[\.:\-)]+\s*(.*)$/i);
   if (!m) return { matched: false, text: "" };
   return { matched: true, text: (m[1] || "").trim() };
+}
+
+function wrapHtmlBlock(paragraphHtmlList: string[]): string {
+  const filtered = paragraphHtmlList.filter((h) => h && h.trim().length > 0);
+  if (filtered.length === 0) return "";
+  // Join paragraph HTML as-is; consumers can render directly
+  return filtered.join("\n");
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
