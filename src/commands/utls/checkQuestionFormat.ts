@@ -68,6 +68,21 @@ function findInvalidParagraphs(lines: string[]): number[] {
       continue;
     }
 
+    // Skip direction blocks from validation perspective
+    if (isDirectionStart(text)) {
+      i++;
+      while (i < lines.length && !isDirectionEnd(lines[i]) && !matchQuestionStart(lines[i])) {
+        i++;
+      }
+      // consume end marker if present
+      if (i < lines.length && isDirectionEnd(lines[i])) i++;
+      continue;
+    }
+    if (isDirectionEnd(text)) {
+      i++;
+      continue;
+    }
+
     const qMatch = matchQuestionStart(text, expectedQ);
     if (!qMatch) {
       // Not a question start; skip and mark as invalid only if it looks like a malformed question header
@@ -147,10 +162,38 @@ function extractQuestions(lines: string[], htmlLines: string[]) {
   const questions: any[] = [];
   let i = 0;
   let qNum = 1;
+  let inDirection = false;
+  let currentDirectionTextParts: string[] = [];
+  let currentDirectionHtmlParts: string[] = [];
 
   while (i < lines.length) {
     const text = lines[i];
     if (!text.trim()) {
+      i++;
+      continue;
+    }
+
+    // Handle direction blocks: start with D-<n>) and end with a line '##End Essay'
+    const dirStart = isDirectionStart(text);
+    if (dirStart) {
+      inDirection = true;
+      currentDirectionTextParts = [];
+      currentDirectionHtmlParts = [];
+      if (dirStart.remainder) currentDirectionTextParts.push(dirStart.remainder.trim());
+      currentDirectionHtmlParts.push(htmlLines[i] || "");
+      i++;
+      // Accumulate additional direction paragraphs until a question header or end marker
+      while (i < lines.length && !isDirectionEnd(lines[i]) && !matchQuestionStart(lines[i])) {
+        currentDirectionTextParts.push(lines[i].trim());
+        currentDirectionHtmlParts.push(htmlLines[i] || "");
+        i++;
+      }
+      continue; // Next iteration will process question or end marker
+    }
+    if (isDirectionEnd(text)) {
+      inDirection = false;
+      currentDirectionTextParts = [];
+      currentDirectionHtmlParts = [];
       i++;
       continue;
     }
@@ -165,6 +208,8 @@ function extractQuestions(lines: string[], htmlLines: string[]) {
       questionNumber: qNum,
       question: "",
       questionHtml: "",
+  direction: inDirection ? currentDirectionTextParts.join(" ").trim() : "",
+  directionHtml: inDirection ? wrapHtmlBlock(currentDirectionHtmlParts) : "",
       options: [],
       optionsHtml: [],
       answer: [],
@@ -339,6 +384,17 @@ function isSolutionLine(line: string): { matched: boolean; text: string } {
   const m = line.match(/^(?:Sol(?:ution)?|Explanation)\s*[\.:\-)]+\s*(.*)$/i);
   if (!m) return { matched: false, text: "" };
   return { matched: true, text: (m[1] || "").trim() };
+}
+
+function isDirectionStart(line: string): null | { remainder: string } {
+  // Example: D-1) Directions text...  OR D-1)
+  const m = line.match(/^\s*D-\d+\)\s*(.*)$/i);
+  if (!m) return null;
+  return { remainder: (m[1] || "").trim() };
+}
+
+function isDirectionEnd(line: string): boolean {
+  return /^\s*##End\s+Essay\s*$/i.test(line || "");
 }
 
 function wrapHtmlBlock(paragraphHtmlList: string[]): string {

@@ -48,6 +48,8 @@ interface Question {
   options: string[];
   answer: string[];
   solution: string;
+  direction?: string;
+  directionHtml?: string;
   // HTML fields from extraction to preserve equations/formatting
   questionHtml?: string;
   optionsHtml?: string[];
@@ -216,19 +218,26 @@ function QuestionCard({
         </button>
       </div>
 
+      {/* Direction (if present) */}
+      {q.directionHtml && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-amber-900 overflow-auto" data-testid="direction-html" dangerouslySetInnerHTML={{ __html: q.directionHtml }} />
+      )}
+
       {/* Question */}
       <div>
         <label className="block text-xs font-medium text-gray-700 mb-1">Question</label>
         {q.questionHtml && (
           <div className="border border-gray-200 rounded-md p-2 mb-2 bg-white overflow-auto" data-testid="question-html" dangerouslySetInnerHTML={{ __html: q.questionHtml }} />
         )}
-        <textarea
-          value={q.question}
-          onChange={(e) => handleQuestionChange(qIndex, "question", e.target.value)}
-          className="w-full border border-gray-300 rounded-md px-2 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition resize-y"
-          rows={3}
-          placeholder="Enter question"
-        />
+        {!q.questionHtml && (
+          <textarea
+            value={q.question}
+            onChange={(e) => handleQuestionChange(qIndex, "question", e.target.value)}
+            className="w-full border border-gray-300 rounded-md px-2 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition resize-y"
+            rows={3}
+            placeholder="Enter question"
+          />
+        )}
       </div>
 
       {/* Settings Row */}
@@ -317,23 +326,25 @@ function QuestionCard({
                     dangerouslySetInnerHTML={{ __html: q.optionsHtml[optIdx] as string }}
                   />
                 )}
-                <div className="flex gap-2 items-center">
-                  <input
-                    type="text"
-                    value={opt}
-                    onChange={(e) => handleOptionChange(qIndex, optIdx, e.target.value)}
-                    className="flex-grow border border-gray-300 rounded px-2 py-1 text-xs shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-100"
-                    placeholder={`Option ${String.fromCharCode(65 + optIdx)}`}
-                  />
-                  <button
-                    onClick={() => removeOption(qIndex, optIdx)}
-                    disabled={q.options.length <= 1}
-                    className="text-red-500 hover:text-red-700 disabled:opacity-40 cursor-pointer"
-                    title="Remove option"
-                  >
-                    <MinusCircle size={13} />
-                  </button>
-                </div>
+                {!q.optionsHtml && (
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="text"
+                      value={opt}
+                      onChange={(e) => handleOptionChange(qIndex, optIdx, e.target.value)}
+                      className="flex-grow border border-gray-300 rounded px-2 py-1 text-xs shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-100"
+                      placeholder={`Option ${String.fromCharCode(65 + optIdx)}`}
+                    />
+                    <button
+                      onClick={() => removeOption(qIndex, optIdx)}
+                      disabled={q.options.length <= 1}
+                      className="text-red-500 hover:text-red-700 disabled:opacity-40 cursor-pointer"
+                      title="Remove option"
+                    >
+                      <MinusCircle size={13} />
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -342,7 +353,7 @@ function QuestionCard({
         {/* Answers */}
         <div>
           <label className="text-xs font-semibold text-gray-600 mb-1 block">Answer(s)</label>
-          <div className="flex flex-wrap gap-1">
+    <div className="flex flex-wrap gap-1">
             {q.options.map((opt, i) => {
               const value = String.fromCharCode(97 + i);
               const isSelected = q.answer.includes(value);
@@ -358,7 +369,7 @@ function QuestionCard({
                   }`}
                   style={{ minWidth: "50px" }}
                 >
-                  {value}) {opt.trim() ? opt : ""}
+      {value}) {q.optionsHtml ? "" : opt.trim() ? opt : ""}
                 </button>
               );
             })}
@@ -399,13 +410,15 @@ function QuestionCard({
         {q.solutionHtml && (
           <div className="border border-gray-200 rounded-md p-2 mb-2 bg-white overflow-auto" data-testid="solution-html" dangerouslySetInnerHTML={{ __html: q.solutionHtml }} />
         )}
-        <textarea
-          value={q.solution}
-          onChange={(e) => handleQuestionChange(qIndex, "solution", e.target.value)}
-          className="w-full border border-gray-300 rounded-md px-2 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-200 resize-y"
-          rows={2}
-          placeholder="Enter solution"
-        />
+        {!q.solutionHtml && (
+          <textarea
+            value={q.solution}
+            onChange={(e) => handleQuestionChange(qIndex, "solution", e.target.value)}
+            className="w-full border border-gray-300 rounded-md px-2 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-200 resize-y"
+            rows={2}
+            placeholder="Enter solution"
+          />
+        )}
       </div>
     </div>
   );
@@ -535,20 +548,7 @@ const Dialog = () => {
             const received = JSON.parse(arg.message);
             const formData: FormData = JSON.parse(received.form);
             let qs: Question[] = JSON.parse(received.questions);
-            // Normalize and default fields
-            if (difficulties.length > 0 || languages.length > 0) {
-              qs = qs.map((q) => ({
-                ...q,
-                questionDifficultyId:
-                  q.questionDifficultyId ?? difficulties[0]?.questionDifficultylevelId,
-                allowCandidateComments: q.allowCandidateComments ?? false,
-                marks: q.marks ?? "1",
-                negativeMarks: q.negativeMarks ?? "0",
-                graceMarks: q.graceMarks ?? "0",
-                language: q.language ?? languages[0]?.language ?? "",
-              }));
-            }
-            // Sanitize and inline images in HTML fields
+            // Set raw first; defaults will be applied in a later effect
             qs = await inlineAllQuestionHtml(qs);
             setFormData(formData);
             setQuestions(qs);
@@ -561,6 +561,25 @@ const Dialog = () => {
         })();
       });
     });
+  }, []);
+
+  // Apply defaults when difficulties/languages are ready
+  useEffect(() => {
+    if (questions.length === 0) return;
+    const defDiff = difficulties[0]?.questionDifficultylevelId;
+    const defLang = languages[0]?.language ?? "";
+    const updated = questions.map((q) => ({
+      ...q,
+      questionDifficultyId: q.questionDifficultyId ?? defDiff,
+      allowCandidateComments: q.allowCandidateComments ?? false,
+      marks: q.marks ?? "1",
+      negativeMarks: q.negativeMarks ?? "0",
+      graceMarks: q.graceMarks ?? "0",
+      language: q.language ?? defLang,
+    }));
+    // Only update if something actually changed
+    const changed = updated.some((uq, i) => JSON.stringify(uq) !== JSON.stringify(questions[i]));
+    if (changed) setQuestions(updated);
   }, [difficulties, languages]);
 
   // Handlers ...
@@ -808,6 +827,9 @@ export default Dialog;
 async function inlineAllQuestionHtml(qs: Question[]): Promise<Question[]> {
   const result: Question[] = [];
   for (const q of qs) {
+    const directionHtml = q.directionHtml
+      ? await sanitizeAndInlineImages(q.directionHtml)
+      : q.directionHtml;
     const questionHtml = q.questionHtml ? await sanitizeAndInlineImages(q.questionHtml) : q.questionHtml;
     const optionsHtml = q.optionsHtml
       ? await Promise.all(q.optionsHtml.map((h) => sanitizeAndInlineImages(h)))
@@ -816,7 +838,7 @@ async function inlineAllQuestionHtml(qs: Question[]): Promise<Question[]> {
     const solutionHtml = q.solutionHtml
       ? await sanitizeAndInlineImages(q.solutionHtml)
       : q.solutionHtml;
-    result.push({ ...q, questionHtml, optionsHtml, answerHtml, solutionHtml });
+    result.push({ ...q, directionHtml, questionHtml, optionsHtml, answerHtml, solutionHtml });
   }
   return result;
 }
