@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { checkFormat } from "../../commands/commands";
+import Start from "./Start";
 
 interface SelectOption {
   value: string;
@@ -15,9 +16,7 @@ const StartPage: React.FC<{
 }> = ({ onCreateTest, onCreateQuestions }) => {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-6 space-y-6">
-      <h1 className="text-3xl font-bold text-gray-700 mb-8">
-        Evalus Portal
-      </h1>
+      <h1 className="text-3xl font-bold text-gray-700 mb-8">Evalus Portal</h1>
       <div className="grid grid-cols-1 gap-4 w-full max-w-sm">
         <button
           onClick={onCreateTest}
@@ -40,7 +39,7 @@ const StartPage: React.FC<{
    Test Creation Form
    (Your existing App logic)
 ------------------------- */
-const TestCreationForm = ({ }) => {
+const TestCreationForm = ({}) => {
   const [form, setForm] = useState({
     testName: "",
     testType: "",
@@ -153,9 +152,7 @@ const TestCreationForm = ({ }) => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
@@ -201,7 +198,9 @@ const TestCreationForm = ({ }) => {
 
   const renderInput = (name: string, label: string, type: "text" | "number" = "text") => (
     <div className="flex flex-col">
-      <label htmlFor={name} className="font-semibold">{label}</label>
+      <label htmlFor={name} className="font-semibold">
+        {label}
+      </label>
       <input
         type={type}
         name={name}
@@ -216,7 +215,9 @@ const TestCreationForm = ({ }) => {
 
   const renderSelect = (name: string, label: string, options: SelectOption[]) => (
     <div className="flex flex-col">
-      <label htmlFor={name} className="font-semibold">{label}</label>
+      <label htmlFor={name} className="font-semibold">
+        {label}
+      </label>
       <select
         name={name}
         id={name}
@@ -226,7 +227,9 @@ const TestCreationForm = ({ }) => {
       >
         <option value="">-- Select --</option>
         {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>{opt.label}</option>
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
         ))}
       </select>
       {errors[name] && <span className="text-red-500 text-sm font-bold">{errors[name]}</span>}
@@ -255,7 +258,10 @@ const TestCreationForm = ({ }) => {
         {renderSelect(
           "instructions",
           "Instructions",
-          instructionsList.map((i) => ({ label: i.testInstructionName, value: i.testInstructionId.toString() }))
+          instructionsList.map((i) => ({
+            label: i.testInstructionName,
+            value: i.testInstructionId.toString(),
+          }))
         )}
         {renderInput("duration", "Duration (min)", "number")}
         {renderInput("handicappedDuration", "Handicapped Duration (min)", "number")}
@@ -266,7 +272,7 @@ const TestCreationForm = ({ }) => {
           "Difficulty",
           difficulties.map((d) => ({
             label: d.testDifficultyLevel1,
-            value: d.testDifficultyLevelId.toString()
+            value: d.testDifficultyLevelId.toString(),
           }))
         )}
       </div>
@@ -313,14 +319,17 @@ const MainContainer: React.FC = () => {
       (result) => {
         if (result.status === Office.AsyncResultStatus.Succeeded) {
           questionDialogRef.current = result.value;
-          questionDialogRef.current.addEventHandler(Office.EventType.DialogMessageReceived, (arg) => {
-            if ("message" in arg && arg.message === "dialogReady") {
-              questionDialogRef.current?.messageChild(questionsPayload);
+          questionDialogRef.current.addEventHandler(
+            Office.EventType.DialogMessageReceived,
+            (arg) => {
+              if ("message" in arg && arg.message === "dialogReady") {
+                questionDialogRef.current?.messageChild(questionsPayload);
+              }
+              if ("message" in arg && arg.message === "closeDialog") {
+                questionDialogRef.current?.close();
+              }
             }
-            if ("message" in arg && arg.message === "closeDialog") {
-              questionDialogRef.current?.close();
-            }
-          });
+          );
         } else {
           console.error("Failed to open question dialog:", result.error);
         }
@@ -328,20 +337,7 @@ const MainContainer: React.FC = () => {
     );
   };
 
-  if (view === "start") {
-    return (
-      <StartPage
-        onCreateTest={() => setView("test")}
-        onCreateQuestions={openQuestionDialog}
-      />
-    );
-  }
-
-  if (view === "test") {
-    return <TestCreationForm />;
-  }
-
-  return null;
+  return <Start />;
 };
 
 export default MainContainer;
