@@ -106,7 +106,7 @@ module.exports = async (env, options) => {
       new HtmlWebpackPlugin({
         filename: "questionDialog.html",
         template: "./src/questionDialog/questionDialog.html",
-        chunks: ["polyfill", "dialog", "react"],
+        chunks: ["polyfill", "questionDialog", "react"],
       }),
       new webpack.ProvidePlugin({
         Promise: ["es6-promise", "Promise"],

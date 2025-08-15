@@ -294,7 +294,7 @@ const TestCreationForm = ({ }) => {
 ------------------------- */
 const MainContainer: React.FC = () => {
   const [view, setView] = useState<"start" | "test">("start");
-  const dialogRef = useRef<Office.Dialog | null>(null);
+  const questionDialogRef = useRef<Office.Dialog | null>(null);
 
   const openQuestionDialog = async () => {
     let questionsPayload = "[]";
@@ -312,13 +312,13 @@ const MainContainer: React.FC = () => {
       { height: 200, width: 300 },
       (result) => {
         if (result.status === Office.AsyncResultStatus.Succeeded) {
-          dialogRef.current = result.value;
-          dialogRef.current.addEventHandler(Office.EventType.DialogMessageReceived, (arg) => {
+          questionDialogRef.current = result.value;
+          questionDialogRef.current.addEventHandler(Office.EventType.DialogMessageReceived, (arg) => {
             if ("message" in arg && arg.message === "dialogReady") {
-              dialogRef.current?.messageChild(questionsPayload);
+              questionDialogRef.current?.messageChild(questionsPayload);
             }
             if ("message" in arg && arg.message === "closeDialog") {
-              dialogRef.current?.close();
+              questionDialogRef.current?.close();
             }
           });
         } else {

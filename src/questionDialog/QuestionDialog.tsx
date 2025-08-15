@@ -99,8 +99,7 @@ function TestDetails({
     {
       key: "testType",
       label: "Test Type",
-      value: testTypes.find((t) => String(t.testTypeId) === String(formData.testType))
-        ?.testType1,
+      value: testTypes.find((t) => String(t.testTypeId) === String(formData.testType))?.testType1,
     },
     { key: "testCode", label: "Test Code", value: formData.testCode },
     {
@@ -418,7 +417,6 @@ function QuestionCard({
 
 // ---- Main ----
 const QuestionDialog = () => {
-  const [formData, setFormData] = useState<FormData | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [validationErrors, setValidationErrors] = useState<string | null>(null);
   const [difficulties, setDifficulties] = useState<Difficulty[]>([]);
@@ -534,8 +532,9 @@ const QuestionDialog = () => {
         (async () => {
           try {
             const received = JSON.parse(arg.message);
-            const formData: FormData = JSON.parse(received.form);
-            let qs: Question[] = JSON.parse(received.questions);
+            console.log({ received });
+            let qs: Question[] = received;
+            console.log({ qs });
             // Normalize and default fields
             if (difficulties.length > 0 || languages.length > 0) {
               qs = qs.map((q) => ({
@@ -551,11 +550,10 @@ const QuestionDialog = () => {
             }
             // Sanitize and inline images in HTML fields
             qs = await inlineAllQuestionHtml(qs);
-            setFormData(formData);
             setQuestions(qs);
             setValidationErrors(null);
-          } catch {
-            setFormData(null);
+          } catch (error) {
+            console.log({ error });
             setQuestions([]);
             setValidationErrors(null);
           }
@@ -658,13 +656,13 @@ const QuestionDialog = () => {
   };
 
   const validateAll = (): string | null => {
-    if (!formData) return "Form data is missing.";
     if (questions.length === 0) return "At least one question is required.";
     for (let i = 0; i < questions.length; i++) {
       const q = questions[i];
       if (q.question.trim() === "") return `Q${q.questionNumber}: Question cannot be empty.`;
       if (q.options.length === 0) return `Q${q.questionNumber}: Must have at least one option.`;
-      if (q.options.some((opt) => opt.trim() === "")) return `Q${q.questionNumber}: An option is empty.`;
+      if (q.options.some((opt) => opt.trim() === ""))
+        return `Q${q.questionNumber}: An option is empty.`;
       if (q.answer.length === 0) return `Q${q.questionNumber}: Please select at least one answer.`;
       if (!q.questionDifficultyId) return `Q${q.questionNumber}: Select a difficulty.`;
       if (!q.marks) return `Q${q.questionNumber}: Marks are required.`;
@@ -679,7 +677,6 @@ const QuestionDialog = () => {
     const error = validateAll();
     setValidationErrors(error);
     const payload = {
-      testMetaData: formData,
       questions: questions.map((q, i) => ({
         questionNumber: i + 1,
         question: q.question,
@@ -697,6 +694,8 @@ const QuestionDialog = () => {
         subjectId: 6,
       })),
     };
+
+    console.log({ payload });
     if (!error) {
       try {
         const res = await fetch(
@@ -731,12 +730,12 @@ const QuestionDialog = () => {
           onClick={handleSubmit}
           className="flex items-center gap-1 px-6 py-1 bg-indigo-600 text-white rounded border border-indigo-600 hover:bg-indigo-700 transition text-sm cursor-pointer"
         >
-          <CheckCircle2 size={14} /> Save Test
+          <CheckCircle2 size={14} /> Save Questions
         </button>
       </div>
 
       {/* Test Details */}
-      {formData && (
+      {/* {formData && (
         <TestDetails
           formData={formData}
           testTypes={testTypes}
@@ -744,7 +743,7 @@ const QuestionDialog = () => {
           instructionsList={instructionsList}
           testdifficulties={testdifficulties}
         />
-      )}
+      )} */}
 
       {/* Validation Error */}
       {validationErrors && (
@@ -753,7 +752,7 @@ const QuestionDialog = () => {
         </div>
       )}
 
-      {!formData ? (
+      {questions.length === 0 ? (
         <p className="text-gray-500 text-center italic text-sm">Waiting for test data...</p>
       ) : (
         <>
@@ -809,12 +808,16 @@ export default QuestionDialog;
 async function inlineAllQuestionHtml(qs: Question[]): Promise<Question[]> {
   const result: Question[] = [];
   for (const q of qs) {
-    const questionHtml = q.questionHtml ? await sanitizeAndInlineImages(q.questionHtml) : q.questionHtml;
+    const questionHtml = q.questionHtml
+      ? await sanitizeAndInlineImages(q.questionHtml)
+      : q.questionHtml;
     const optionsHtml = q.optionsHtml
       ? await Promise.all(q.optionsHtml.map((h) => sanitizeAndInlineImages(h)))
       : q.optionsHtml;
     const answerHtml = q.answerHtml ? await sanitizeAndInlineImages(q.answerHtml) : q.answerHtml;
-    const solutionHtml = q.solutionHtml ? await sanitizeAndInlineImages(q.solutionHtml) : q.solutionHtml;
+    const solutionHtml = q.solutionHtml
+      ? await sanitizeAndInlineImages(q.solutionHtml)
+      : q.solutionHtml;
     result.push({ ...q, questionHtml, optionsHtml, answerHtml, solutionHtml });
   }
   return result;
