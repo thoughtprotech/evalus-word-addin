@@ -67,7 +67,7 @@ const Dialog = () => {
       questionNumber: q.questionNumber,
       question: q.questionHtml,
       options: q.optionsHtml,
-      answer: q.answerHtml,
+      answer: [q.answerHtml],
       solution: q.solutionHtml,
       subjectId: q.subject,
       marks: q.marks,
@@ -84,6 +84,7 @@ const Dialog = () => {
 
     if (status === 201) {
       toast.success("Questions Saved");
+      
     } else {
       toast.error("Something Went Wrong");
     }
