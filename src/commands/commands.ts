@@ -3,7 +3,7 @@
  * See LICENSE in the project root for license information.
  */
 
-import checkFormatHelper from "./utls/checkQuestionFormat";
+import checkFormatHelper from "./utils/checkQuestionFormat";
 
 /* global Office, Word */
 
