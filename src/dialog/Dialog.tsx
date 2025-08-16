@@ -84,7 +84,7 @@ const Dialog = () => {
 
     if (status === 201) {
       toast.success("Questions Saved");
-      
+      Office.context.ui.messageParent("closeDialog");
     } else {
       toast.error("Something Went Wrong");
     }

@@ -341,7 +341,7 @@ export default function QuestionPreview({
           <div className="flex gap-2">
             <button
               type="button"
-              className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium shadow"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium shadow cursor-pointer"
               onClick={() => {
                 if (!areAllQuestionsComplete(questions)) {
                   setError(
@@ -357,7 +357,7 @@ export default function QuestionPreview({
             </button>
             <button
               type="button"
-              className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium shadow"
+              className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium shadow cursor-pointer"
               onClick={() => {
                 if (!areAllQuestionsComplete(questions)) {
                   setError(
