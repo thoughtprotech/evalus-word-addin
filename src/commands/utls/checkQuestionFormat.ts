@@ -83,7 +83,7 @@ function findInvalidParagraphs(lines: string[]): number[] {
       continue;
     }
 
-    const qMatch = matchQuestionStart(text, expectedQ);
+  const qMatch = matchQuestionStart(text);
     if (!qMatch) {
       // Not a question start; skip and mark as invalid only if it looks like a malformed question header
       if (/^\s*\d+/.test(text)) invalid.push(i);
@@ -100,7 +100,7 @@ function findInvalidParagraphs(lines: string[]): number[] {
       !containsAnyOption(lines[i]) &&
       !isAnswerLine(lines[i]).matched &&
       !isSolutionLine(lines[i]).matched &&
-      !matchQuestionStart(lines[i])
+  !matchQuestionStart(lines[i])
     ) {
       i++;
     }
@@ -112,7 +112,7 @@ function findInvalidParagraphs(lines: string[]): number[] {
       i < lines.length &&
       !isAnswerLine(lines[i]).matched &&
       !isSolutionLine(lines[i]).matched &&
-      !matchQuestionStart(lines[i])
+  !matchQuestionStart(lines[i])
     ) {
       const para = lines[i];
       const opts = splitOptionsFromParagraph(para);
@@ -198,7 +198,7 @@ function extractQuestions(lines: string[], htmlLines: string[]) {
       continue;
     }
 
-    const qMatch = matchQuestionStart(text, qNum);
+  const qMatch = matchQuestionStart(text);
     if (!qMatch) {
       i++;
       continue;
@@ -232,7 +232,7 @@ function extractQuestions(lines: string[], htmlLines: string[]) {
       !containsAnyOption(lines[i]) &&
       !isAnswerLine(lines[i]).matched &&
       !isSolutionLine(lines[i]).matched &&
-      !matchQuestionStart(lines[i])
+  !matchQuestionStart(lines[i])
     ) {
       questionLines.push(lines[i].trim());
       questionHtmlParts.push(htmlLines[i] || "");
@@ -247,7 +247,7 @@ function extractQuestions(lines: string[], htmlLines: string[]) {
       i < lines.length &&
       !isAnswerLine(lines[i]).matched &&
       !isSolutionLine(lines[i]).matched &&
-      !matchQuestionStart(lines[i])
+  !matchQuestionStart(lines[i])
     ) {
       const para = lines[i];
       const opts = splitOptionsFromParagraph(para);
@@ -263,7 +263,8 @@ function extractQuestions(lines: string[], htmlLines: string[]) {
     if (i < lines.length && isAnswerLine(lines[i]).matched) {
       const ans = isAnswerLine(lines[i]);
       questionObj.answer = ans.letters;
-      questionObj.answerHtml = `<p>${escapeHtml(ans.tail)}</p>`;
+      // preserve original paragraph HTML for answers
+      questionObj.answerHtml = htmlLines[i] || `<p>${escapeHtml(ans.tail)}</p>`;
       i++;
     }
 
@@ -271,7 +272,8 @@ function extractQuestions(lines: string[], htmlLines: string[]) {
     if (i < lines.length && isSolutionLine(lines[i]).matched) {
       const sol = isSolutionLine(lines[i]);
       questionObj.solution = sol.text;
-      questionObj.solutionHtml = `<p>${escapeHtml(sol.text)}</p>`;
+      // preserve original paragraph HTML for solutions
+      questionObj.solutionHtml = htmlLines[i] || `<p>${escapeHtml(sol.text)}</p>`;
       i++;
     }
 
@@ -331,7 +333,10 @@ function splitOptionsFromParagraph(text: string): OptionEntry[] {
 
   if (unique.length === 0) {
     // If the entire line starts like a single-labeled option without spacing variety, try simple anchors
-    const m = s.match(/^([a-eA-E])\)\s+(.*)$/) || s.match(/^\(([a-eA-E])\)\s+(.*)$/) || s.match(/^([a-eA-E])\.\s+(.*)$/);
+    const m =
+      s.match(/^([a-zA-Z])\)\s+(.*)$/) ||
+      s.match(/^\(([a-zA-Z])\)\s+(.*)$/) ||
+      s.match(/^([a-zA-Z])\.\s+(.*)$/);
     if (m) return [{ label: m[1].toLowerCase(), text: (m[2] || "").trim() }];
     return [];
   }
@@ -373,7 +378,7 @@ function containsAnyOption(text: string): boolean {
 }
 
 function isAnswerLine(line: string): { matched: boolean; letters: string[]; tail: string } {
-  const m = line.match(/^(?:Ans(?:wer)?|Correct\s*Answer)\s*[\.:\-)]+\s*(.*)$/i);
+  const m = line.match(/^(?:A(?:d)?ns(?:wer)?|Correct\s*Answer)\s*[\.:\-)]+\s*(.*)$/i);
   if (!m) return { matched: false, letters: [], tail: "" };
   const tail = (m[1] || "").trim();
   const letters = Array.from(tail.matchAll(/[a-z]/gi)).map((x) => x[0].toLowerCase());
