@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import toast, { Toaster } from "react-hot-toast";
 import QuestionPreview from "./components/QuestionPreview";
+import { submitQuestions } from "../apis/startPageAPIs";
 
 // ---- Types ----
 type PatternField = { value: string; label: string };
@@ -62,7 +63,30 @@ const Dialog = () => {
   }, []);
 
   const createQuestions = async () => {
-    console.log({ questions });
+    const payload = questions.map((q) => ({
+      questionNumber: q.questionNumber,
+      question: q.questionHtml,
+      options: q.optionsHtml,
+      answer: q.answerHtml,
+      solution: q.solutionHtml,
+      subjectId: q.subject,
+      marks: q.marks,
+      negativeMarks: q.negativeMarks,
+      graceMarks: q.graceMarks,
+      questionDifficultyLevelId: q.questionDifficultyId,
+      language: q.language,
+      sectionId: 0,
+      allowCandidateComments: true,
+      questionTypeId: 1,
+    }));
+
+    const { status } = await submitQuestions(payload);
+
+    if (status === 201) {
+      toast.success("Questions Saved");
+    } else {
+      toast.error("Something Went Wrong");
+    }
   };
 
   const createTest = async () => {};

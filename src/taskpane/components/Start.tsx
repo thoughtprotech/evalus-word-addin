@@ -175,14 +175,14 @@ export default function Start() {
           <div className="flex flex-col gap-2 pt-2 border-t border-gray-200">
             <button
               type="button"
-              className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 transition font-semibold justify-center"
+              className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 transition font-semibold justify-center cursor-pointer"
               onClick={handleReadNow}
             >
               <Book size={18} /> Read Now
             </button>
             <button
               type="button"
-              className="flex items-center gap-2 bg-red-500 text-white px-5 py-2 rounded-lg hover:bg-red-600 transition font-semibold justify-center"
+              className="flex items-center gap-2 bg-red-500 text-white px-5 py-2 rounded-lg hover:bg-red-600 transition font-semibold justify-center cursor-pointer"
             >
               <LogOut size={18} /> Logout
             </button>
