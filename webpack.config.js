@@ -29,10 +29,6 @@ module.exports = async (env, options) => {
         import: "./src/dialog/dialogIndex.tsx",
         dependOn: "react",
       },
-      questionDialog: {
-        import: "./src/questionDialog/questionDialogIndex.tsx",
-        dependOn: "react",
-      },
     },
     output: {
       clean: true,
@@ -102,11 +98,6 @@ module.exports = async (env, options) => {
         filename: "dialog.html",
         template: "./src/dialog/dialog.html",
         chunks: ["polyfill", "dialog", "react"],
-      }),
-      new HtmlWebpackPlugin({
-        filename: "questionDialog.html",
-        template: "./src/questionDialog/questionDialog.html",
-        chunks: ["polyfill", "questionDialog", "react"],
       }),
       new webpack.ProvidePlugin({
         Promise: ["es6-promise", "Promise"],
