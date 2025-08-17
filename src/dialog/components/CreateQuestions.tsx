@@ -81,7 +81,7 @@ const fetchChildren = async (parentId: number): Promise<Option[]> => {
     }));
 };
 
-export default function QuestionPreview({
+export default function CreateQuestioons({
   questions,
   setQuestions,
   createQuestions,
@@ -519,23 +519,6 @@ export default function QuestionPreview({
               >
                 <option value="">{loading ? "Loading..." : "Select Topic"}</option>
                 {topics.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {/* Subtopic */}
-            <div>
-              <label className="block mb-1 text-gray-600 font-bold text-xs">Subtopic</label>
-              <select
-                className="w-fit border rounded-lg px-2 py-1.5 text-sm"
-                value={bulkValues.subtopic}
-                onChange={(e) => handleBulkValueChange("subtopic", e.target.value)}
-                disabled={!bulkValues.topic}
-              >
-                <option value="">{loading ? "Loading..." : "Select Subtopic"}</option>
-                {subtopics.map((opt) => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
                   </option>

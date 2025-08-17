@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import toast, { Toaster } from "react-hot-toast";
-import QuestionPreview from "./components/QuestionPreview";
 import { submitQuestions } from "../apis/startPageAPIs";
+import CreateQuestioons from "./components/CreateQuestions";
+import CreateTest from "./components/CreateTest";
 
 // ---- Types ----
 type PatternField = { value: string; label: string };
@@ -39,6 +40,7 @@ interface Question {
 const Dialog = () => {
   const [formData, setFormData] = useState<FormData | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [createTestFlag, setCreateTestFlag] = useState<boolean>(false);
 
   useEffect(() => {
     Office.onReady(() => {
@@ -90,16 +92,27 @@ const Dialog = () => {
     }
   };
 
-  const createTest = async () => {};
+  const createTest = async () => {
+    setCreateTestFlag(true);
+  };
 
   return (
     <div className="p-4 bg-white rounded-lg shadow-md w-full min-h-screen overflow-auto font-sans text-sm">
-      <QuestionPreview
-        questions={questions}
-        setQuestions={setQuestions}
-        createQuestions={createQuestions}
-        createTest={createTest}
-      />
+      {!createTestFlag ? (
+        <CreateQuestioons
+          questions={questions}
+          setQuestions={setQuestions}
+          createQuestions={createQuestions}
+          createTest={createTest}
+        />
+      ) : (
+        <CreateTest
+          questions={questions}
+          // setQuestions={setQuestions}
+          // createQuestions={createQuestions}
+          // createTest={createTest}
+        />
+      )}
       <Toaster />
     </div>
   );
