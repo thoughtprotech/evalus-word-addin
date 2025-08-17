@@ -1,11 +1,23 @@
 import React, { useEffect, useState } from "react";
-import { CheckCircle, FileQuestion, Lightbulb, Settings, Eye, Trash2 } from "lucide-react";
+import {
+  CheckCircle,
+  FileQuestion,
+  Lightbulb,
+  Settings,
+  Eye,
+  Trash2,
+  Grid,
+  LayoutList,
+  LayoutGrid,
+  TableIcon,
+} from "lucide-react";
 import { TextOrHtml } from "./TextOrHtml";
 
 interface Option {
   value: string | number;
   label: string;
 }
+
 interface Question {
   questionNumber: number;
   question: string;
@@ -25,11 +37,13 @@ interface Question {
   chapter?: string;
   subtopic?: string;
 }
+
 interface BulkActionPreview {
   rangeStart: number;
   rangeEnd: number;
   values: BulkValues;
 }
+
 interface BulkValues {
   marks: string;
   negativeMarks: string;
@@ -41,6 +55,7 @@ interface BulkValues {
   topic: string;
   subtopic: string;
 }
+
 const API_BASE = "https://evalusdevapi.thoughtprotraining.com/api";
 
 // API Calls
@@ -81,7 +96,7 @@ const fetchChildren = async (parentId: number): Promise<Option[]> => {
     }));
 };
 
-export default function CreateQuestioons({
+export default function CreateQuestions({
   questions,
   setQuestions,
   createQuestions,
@@ -103,6 +118,8 @@ export default function CreateQuestioons({
   const [allTopics, setAllTopics] = useState<Option[]>([]);
   const [allSubtopics, setAllSubtopics] = useState<Option[]>([]);
   const [loading, setLoading] = useState(false);
+
+  const [viewMode, setViewMode] = useState<"card" | "table">("table");
 
   // Range selection
   const [rangeStart, setRangeStart] = useState<number | null>(null);
@@ -211,10 +228,10 @@ export default function CreateQuestioons({
       setError("Please enter a valid range within questions.");
       return false;
     }
-    if (doesRangeOverlap(rangeStart, rangeEnd)) {
-      setError("The specified range overlaps with a previously set range.");
-      return false;
-    }
+    // if (doesRangeOverlap(rangeStart, rangeEnd)) {
+    //   setError("The specified range overlaps with a previously set range.");
+    //   return false;
+    // }
     // Mandatory fields (except subtopic)
     if (
       !bulkValues.marks.trim() ||
@@ -280,22 +297,16 @@ export default function CreateQuestioons({
   // Allow preview removal (optional)
   const removePreviewEntry = (idx: number) => {
     setBulkActionPreview((prev) => {
-      // Get the entry being removed
       const toRemove = prev[idx];
-      if (!toRemove) return prev; // fallback safety
+      if (!toRemove) return prev;
 
-      // Remove the entry visually
       const newPreview = prev.filter((_, i) => i !== idx);
 
-      // Clear affected values in questions state
       setQuestions((prevQuestions) =>
         prevQuestions.map((q) => {
           if (q.questionNumber >= toRemove.rangeStart && q.questionNumber <= toRemove.rangeEnd) {
-            // For every key that was set in that bulk, clear the value if it matches
-            // (This handles only clearing the fields that were set in the bulk)
             const cleared: any = { ...q };
             Object.keys(toRemove.values).forEach((key) => {
-              // Only clear if this field matches the value from the removed bulk action
               if (
                 toRemove.values[key as keyof BulkValues] !== "" &&
                 cleared[key] === toRemove.values[key as keyof BulkValues]
@@ -309,7 +320,7 @@ export default function CreateQuestioons({
         })
       );
 
-      setError(""); // Reset any errors maybe caused due to overlap
+      setError("");
       return newPreview;
     });
   };
@@ -338,7 +349,7 @@ export default function CreateQuestioons({
             <FileQuestion className="w-5 h-5 text-indigo-600" />
             Preview Questions
           </h1>
-          <div className="flex gap-2">
+          <div className="flex gap-4 items-center">
             <button
               type="button"
               className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium shadow cursor-pointer"
@@ -349,7 +360,7 @@ export default function CreateQuestioons({
                   );
                   return;
                 }
-                setError(""); // Clear any previous error
+                setError("");
                 createQuestions();
               }}
             >
@@ -549,7 +560,7 @@ export default function CreateQuestioons({
                 >
                   <div className="flex-1 min-w-0 text-xs text-gray-900 leading-snug">
                     <span className="font-semibold text-indigo-700 mr-1">
-                      Q){action.rangeStart} - Q){action.rangeEnd}
+                      Q{action.rangeStart} - Q{action.rangeEnd}
                     </span>
                     <div className="flex flex-wrap gap-2 mt-1">
                       {Object.entries(action.values)
@@ -576,7 +587,6 @@ export default function CreateQuestioons({
                             if (found) displayVal = found.label;
                           }
 
-                          // Choose colors per key (like in question card)
                           const colorMap: Record<string, string> = {
                             marks: "bg-indigo-400/10 text-indigo-700",
                             negativeMarks: "bg-indigo-400/10 text-indigo-600",
@@ -592,7 +602,9 @@ export default function CreateQuestioons({
                           return (
                             <span
                               key={key}
-                              className={`flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full ${colorMap[key] || "bg-gray-100 text-gray-600"}`}
+                              className={`flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full ${
+                                colorMap[key] || "bg-gray-100 text-gray-600"
+                              }`}
                             >
                               <span className="capitalize text-xs">
                                 {key === "marks"
@@ -622,104 +634,220 @@ export default function CreateQuestioons({
             </ul>
           </div>
         )}
-      </div>
 
-      {/* Questions */}
-      <div className="grid grid-cols-2 gap-4">
-        {questions.length > 0 ? (
-          questions.map((q) => (
-            <div
-              key={q.questionNumber}
-              className="bg-white rounded-xl border border-gray-200 shadow-md hover:shadow-xl transition-all duration-300 p-5 relative overflow-hidden flex flex-col justify-between"
+        {/* View Mode Toggle handled in header above */}
+        {/* View toggle buttons */}
+        <div className="flex justify-between items-center mb-3">
+          <h2 className="text-lg font-bold text-indigo-700">Questions ({questions.length})</h2>
+          {/* View toggle buttons */}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setViewMode("card")}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium shadow cursor-pointer ${
+                viewMode === "card" ? "bg-indigo-600 text-white" : "bg-gray-200 text-gray-700"
+              }`}
             >
-              {/* Decorative accent */}
-              <div className="absolute top-0 left-0 w-2 h-full bg-gradient-to-b from-indigo-500 to-blue-400 rounded-l-xl"></div>
+              <LayoutGrid className="w-4 h-4" /> Card View
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("table")}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium shadow cursor-pointer ${
+                viewMode === "table" ? "bg-indigo-600 text-white" : "bg-gray-200 text-gray-700"
+              }`}
+            >
+              <TableIcon className="w-4 h-4" /> Table View
+            </button>
+          </div>
+        </div>
+        {/* Questions View */}
+        {viewMode === "card" ? (
+          // CARD VIEW (default)
+          <div className="grid grid-cols-2 gap-4">
+            {questions.length > 0 ? (
+              questions.map((q) => (
+                <div
+                  key={q.questionNumber}
+                  className="bg-white rounded-xl border border-gray-200 shadow-md hover:shadow-xl transition-all duration-300 p-5 relative overflow-hidden flex flex-col justify-between"
+                >
+                  {/* Decorative accent */}
+                  <div className="absolute top-0 left-0 w-2 h-full bg-gradient-to-b from-indigo-500 to-blue-400 rounded-l-xl"></div>
 
-              {/* Header */}
-              <div className="flex items-start gap-3 mb-4">
-                <span className="text-xs font-semibold text-indigo-700 bg-indigo-100 px-2 py-1 rounded-lg shadow-sm">
-                  {q.questionNumber}
-                </span>
-                <TextOrHtml content={q.question} />
-              </div>
-
-              {/* Options */}
-              <ul className="grid grid-cols-2 gap-x-6 gap-y-2 ml-6 text-sm text-gray-700 mb-4">
-                {q.optionsHtml.map((opt, i) => (
-                  <li
-                    key={i}
-                    className="flex items-start gap-2 group hover:text-indigo-600 transition bg-indigo-400/10 rounded-md px-4 py-1"
-                  >
-                    <span className="text-indigo-600 font-semibold group-hover:scale-110 transition-transform">
-                      {String.fromCharCode(65 + i)}.
+                  {/* Header */}
+                  <div className="flex items-start gap-3 mb-4">
+                    <span className="text-xs font-semibold text-indigo-700 bg-indigo-100 px-2 py-1 rounded-lg shadow-sm">
+                      {q.questionNumber}
                     </span>
-                    <TextOrHtml content={opt} />
-                  </li>
-                ))}
-              </ul>
+                    <TextOrHtml content={q.question} />
+                  </div>
 
-              {/* Answer & Solution */}
-              <div className="ml-6 space-y-2 text-sm">
-                <div className="flex items-center gap-2 text-emerald-600 font-semibold">
-                  <CheckCircle className="w-4 h-4 shrink-0" />
-                  <span className="flex items-center gap-2">
-                    Correct Answer: <TextOrHtml content={q.answer.join(", ").toUpperCase()} />
-                  </span>
+                  {/* Options */}
+                  <ul className="grid grid-cols-2 gap-x-6 gap-y-2 ml-6 text-sm text-gray-700 mb-4">
+                    {q.optionsHtml.map((opt, i) => (
+                      <li
+                        key={i}
+                        className="flex items-start gap-2 group hover:text-indigo-600 transition bg-indigo-400/10 rounded-md px-4 py-1"
+                      >
+                        <span className="text-indigo-600 font-semibold group-hover:scale-110 transition-transform">
+                          {String.fromCharCode(65 + i)}.
+                        </span>
+                        <TextOrHtml content={opt} />
+                      </li>
+                    ))}
+                  </ul>
+
+                  {/* Answer & Solution */}
+                  <div className="ml-6 space-y-2 text-sm">
+                    <div className="flex items-center gap-2 text-emerald-600 font-semibold">
+                      <CheckCircle className="w-4 h-4 shrink-0" />
+                      <span className="flex items-center gap-2">
+                        Correct Answer: <TextOrHtml content={q.answer.join(", ").toUpperCase()} />
+                      </span>
+                    </div>
+                    {q.solution.length !== 0 && (
+                      <div className="flex items-start gap-2 text-gray-600 leading-relaxed">
+                        <Lightbulb className="w-4 h-4 text-yellow-500 shrink-0 mt-1" />
+                        <TextOrHtml content={q.solution} />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Settings badges */}
+                  <div className="mt-4 flex items-center gap-2 flex-wrap">
+                    {q.marks && (
+                      <div className="w-fit text-indigo-600 flex rounded-full bg-indigo-400/10 px-2 py-1 gap-2">
+                        <h1 className="font-bold text-xs">Marks</h1>
+                        <h1 className="font-bold text-xs">{q.marks}</h1>
+                      </div>
+                    )}
+                    {q.negativeMarks && (
+                      <div className="w-fit text-indigo-600 flex rounded-full bg-indigo-400/10 px-2 py-1 gap-2">
+                        <h1 className="font-bold text-xs">Negative Marks</h1>
+                        <h1 className="font-bold text-xs">{q.negativeMarks}</h1>
+                      </div>
+                    )}
+                    {q.graceMarks && (
+                      <div className="w-fit text-indigo-600 flex rounded-full bg-indigo-400/10 px-2 py-1 gap-2">
+                        <h1 className="font-bold text-xs">Grace Marks</h1>
+                        <h1 className="font-bold text-xs">{q.graceMarks}</h1>
+                      </div>
+                    )}
+                    {q.language && (
+                      <div className="w-fit text-indigo-600 flex rounded-full bg-indigo-400/10 px-2 py-1 gap-2">
+                        <h1 className="font-bold text-xs">{q.language}</h1>
+                      </div>
+                    )}
+                    {q.questionDifficultyId && (
+                      <div className="w-fit text-indigo-600 flex rounded-full bg-indigo-400/10 px-2 py-1 gap-2">
+                        <h1 className="font-bold text-xs">
+                          {
+                            difficulties.find((d) => String(d.value) === q.questionDifficultyId)
+                              ?.label
+                          }
+                        </h1>
+                      </div>
+                    )}
+                    {q.topic && (
+                      <div className="w-fit text-indigo-600 flex rounded-full bg-indigo-400/10 px-2 py-1 gap-2">
+                        <h1 className="font-bold text-xs">
+                          {allTopics.find((t) => String(t.value) === q.topic)?.label}
+                        </h1>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                {q.solution.length !== 0 && (
-                  <div className="flex items-start gap-2 text-gray-600 leading-relaxed">
-                    <Lightbulb className="w-4 h-4 text-yellow-500 shrink-0 mt-1" />
-                    <TextOrHtml content={q.solution} />
-                  </div>
-                )}
+              ))
+            ) : (
+              <div className="p-6 text-center text-gray-500 text-sm bg-white rounded-xl border">
+                No questions found.
               </div>
-
-              {/* Settings */}
-              <div className="mt-4 flex items-center gap-2 flex-wrap">
-                {q.marks && (
-                  <div className="w-fit text-indigo-600 flex rounded-full bg-indigo-400/10 px-2 py-1 gap-2">
-                    <h1 className="font-bold text-xs">Marks</h1>
-                    <h1 className="font-bold text-xs">{q.marks}</h1>
-                  </div>
-                )}
-                {q.negativeMarks && (
-                  <div className="w-fit text-indigo-600 flex rounded-full bg-indigo-400/10 px-2 py-1 gap-2">
-                    <h1 className="font-bold text-xs">Negative Marks</h1>
-                    <h1 className="font-bold text-xs">{q.negativeMarks}</h1>
-                  </div>
-                )}
-                {q.graceMarks && (
-                  <div className="w-fit text-indigo-600 flex rounded-full bg-indigo-400/10 px-2 py-1 gap-2">
-                    <h1 className="font-bold text-xs">Grace Marks</h1>
-                    <h1 className="font-bold text-xs">{q.graceMarks}</h1>
-                  </div>
-                )}
-                {q.language && (
-                  <div className="w-fit text-indigo-600 flex rounded-full bg-indigo-400/10 px-2 py-1 gap-2">
-                    {/* <h1 className="text-xs">Language</h1> */}
-                    <h1 className="font-bold text-xs">{q.language}</h1>
-                  </div>
-                )}
-                {q.questionDifficultyId && (
-                  <div className="w-fit text-indigo-600 flex rounded-full bg-indigo-400/10 px-2 py-1 gap-2">
-                    <h1 className="font-bold text-xs">
-                      {difficulties.find((d) => String(d.value) === q.questionDifficultyId).label}
-                    </h1>
-                  </div>
-                )}
-                {q.topic && (
-                  <div className="w-fit text-indigo-600 flex rounded-full bg-indigo-400/10 px-2 py-1 gap-2">
-                    <h1 className="font-bold text-xs">
-                      {allTopics.find((t) => String(t.value) === q.topic).label}
-                    </h1>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))
+            )}
+          </div>
         ) : (
-          <div className="p-6 text-center text-gray-500 text-sm bg-white rounded-xl border">
-            No questions found.
+          // TABLE VIEW
+          <div className="overflow-x-auto rounded-lg bg-white shadow-sm">
+            <table className="min-w-full border-collapse divide-y divide-gray-200 text-sm">
+              <thead className="bg-indigo-100">
+                <tr>
+                  <th className="sticky top-0 px-3 py-2 text-left font-semibold text-indigo-800">
+                    #
+                  </th>
+                  <th className="sticky top-0 px-3 py-2 text-left font-semibold text-indigo-800">
+                    Question
+                  </th>
+                  <th className="sticky top-0 px-3 py-2 text-left font-semibold text-indigo-800">
+                    Options
+                  </th>
+                  <th className="sticky top-0 px-3 py-2 text-left font-semibold text-indigo-800">
+                    Answer
+                  </th>
+                  <th className="sticky top-0 px-3 py-2 text-left font-semibold text-indigo-800">
+                    Marks
+                  </th>
+                  <th className="sticky top-0 px-3 py-2 text-left font-semibold text-indigo-800">
+                    Neg. Marks
+                  </th>
+                  <th className="sticky top-0 px-3 py-2 text-left font-semibold text-indigo-800">
+                    Grace Marks
+                  </th>
+                  <th className="sticky top-0 px-3 py-2 text-left font-semibold text-indigo-800">
+                    Language
+                  </th>
+                  <th className="sticky top-0 px-3 py-2 text-left font-semibold text-indigo-800">
+                    Difficulty
+                  </th>
+                  <th className="sticky top-0 px-3 py-2 text-left font-semibold text-indigo-800">
+                    Topic
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {questions.length > 0 ? (
+                  questions.map((q) => (
+                    <tr key={q.questionNumber}>
+                      <td className="p-2 whitespace-nowrap">{q.questionNumber}</td>
+                      <td className="p-2 max-w-xs whitespace-normal">
+                        <TextOrHtml content={q.question} />
+                      </td>
+                      <td className="p-2 max-w-xs whitespace-normal">
+                        <ul className="list-disc ml-5 space-y-0.5">
+                          {q.optionsHtml
+                            ? q.optionsHtml.map((opt, i) => (
+                                <li key={i}>
+                                  <TextOrHtml content={opt} />
+                                </li>
+                              ))
+                            : q.options.map((opt, i) => <li key={i}>{opt}</li>)}
+                        </ul>
+                      </td>
+                      <td className="p-2 whitespace-normal">
+                        <TextOrHtml content={q.answer.join(", ").toUpperCase()} />
+                      </td>
+                      <td className="p-2 whitespace-nowrap">{q.marks}</td>
+                      <td className="p-2 whitespace-nowrap">{q.negativeMarks}</td>
+                      <td className="p-2 whitespace-nowrap">{q.graceMarks}</td>
+                      <td className="p-2 whitespace-nowrap">{q.language}</td>
+                      <td className="p-2 whitespace-nowrap">
+                        {
+                          difficulties.find((d) => String(d.value) === q.questionDifficultyId)
+                            ?.label
+                        }
+                      </td>
+                      <td className="p-2 whitespace-nowrap">
+                        {allTopics.find((t) => String(t.value) === q.topic)?.label}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={10} className="text-center py-6 text-gray-500">
+                      No questions found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { File } from "lucide-react";
+import { File, LayoutGrid, TableIcon } from "lucide-react";
 import {
   createTest,
   fetchSectionList,
@@ -114,6 +114,7 @@ export default function CreateTest({ questions }: { questions: Question[] }) {
   const [rangeEnd, setRangeEnd] = useState<number | "">(questions.length || 1);
   const [selectedSectionId, setSelectedSectionId] = useState<number | "">("");
   const [localQuestions, setLocalQuestions] = useState<Question[]>(questions);
+  const [viewMode, setViewMode] = useState<"card" | "table">("table");
 
   // Fetch dropdown options from APIs and map to id-name pairs
   useEffect(() => {
@@ -286,141 +287,160 @@ export default function CreateTest({ questions }: { questions: Question[] }) {
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           {/* Test Name */}
-          <input
-            className="border rounded-lg px-3 py-2 text-sm"
-            type="text"
-            name="testName"
-            placeholder="Test Name"
-            value={testMeta.testName}
-            onChange={handleMetaChange}
-          />
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">Test Name</label>
+            <input
+              className="border rounded-lg px-3 py-2 text-sm"
+              type="text"
+              name="testName"
+              placeholder="Test Name"
+              value={testMeta.testName}
+              onChange={handleMetaChange}
+            />
+          </div>
 
           {/* Test Type Dropdown - value is ID */}
-          <select
-            className="border rounded-lg px-3 py-2 text-sm"
-            name="testType"
-            value={testMeta.testType}
-            onChange={(e) =>
-              handleMetaDropdown("testType", e.target.value ? Number(e.target.value) : "")
-            }
-            disabled={loadingTestType}
-          >
-            <option value="">{loadingTestType ? "Loading..." : "Select Test Type"}</option>
-            {testTypes.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">Test Type</label>
+            <select
+              className="border rounded-lg px-3 py-2 text-sm"
+              name="testType"
+              value={testMeta.testType}
+              onChange={(e) =>
+                handleMetaDropdown("testType", e.target.value ? Number(e.target.value) : "")
+              }
+              disabled={loadingTestType}
+            >
+              <option value="">{loadingTestType ? "Loading..." : "Select Test Type"}</option>
+              {testTypes.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
           {/* Test Code */}
-          <input
-            className="border rounded-lg px-3 py-2 text-sm"
-            type="text"
-            name="testCode"
-            placeholder="Test Code"
-            value={testMeta.testCode}
-            onChange={handleMetaChange}
-          />
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">Test Code</label>
+            <input
+              className="border rounded-lg px-3 py-2 text-sm"
+              type="text"
+              name="testCode"
+              placeholder="Test Code"
+              value={testMeta.testCode}
+              onChange={handleMetaChange}
+            />
+          </div>
 
           {/* Category Dropdown - value is ID */}
-          <select
-            className="border rounded-lg px-3 py-2 text-sm"
-            name="category"
-            value={testMeta.category}
-            onChange={(e) =>
-              handleMetaDropdown("category", e.target.value ? Number(e.target.value) : "")
-            }
-            disabled={loadingCategory}
-          >
-            <option value="">{loadingCategory ? "Loading..." : "Select Category"}</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">Category</label>
+            <select
+              className="border rounded-lg px-3 py-2 text-sm"
+              name="category"
+              value={testMeta.category}
+              onChange={(e) =>
+                handleMetaDropdown("category", e.target.value ? Number(e.target.value) : "")
+              }
+              disabled={loadingCategory}
+            >
+              <option value="">{loadingCategory ? "Loading..." : "Select Category"}</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
           {/* Duration */}
-          <input
-            className="border rounded-lg px-3 py-2 text-sm"
-            type="text"
-            name="duration"
-            placeholder="Duration (minutes)"
-            value={testMeta.duration}
-            onChange={handleMetaChange}
-          />
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">Duration (minutes)</label>
+            <input
+              className="border rounded-lg px-3 py-2 text-sm"
+              type="text"
+              name="duration"
+              placeholder="Duration (minutes)"
+              value={testMeta.duration}
+              onChange={handleMetaChange}
+            />
+          </div>
 
           {/* Handicapped Duration */}
-          <input
-            className="border rounded-lg px-3 py-2 text-sm"
-            type="text"
-            name="handicappedDuration"
-            placeholder="Handicapped Duration (minutes)"
-            value={testMeta.handicappedDuration}
-            onChange={handleMetaChange}
-          />
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">
+              Handicapped Duration (minutes)
+            </label>
+            <input
+              className="border rounded-lg px-3 py-2 text-sm"
+              type="text"
+              name="handicappedDuration"
+              placeholder="Handicapped Duration (minutes)"
+              value={testMeta.handicappedDuration}
+              onChange={handleMetaChange}
+            />
+          </div>
 
           {/* Total Marks */}
-          <input
-            className="border rounded-lg px-3 py-2 text-sm"
-            type="text"
-            name="totalMarks"
-            placeholder="Total Marks"
-            value={testMeta.totalMarks}
-            onChange={handleMetaChange}
-          />
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">Total Marks</label>
+            <input
+              className="border rounded-lg px-3 py-2 text-sm"
+              type="text"
+              name="totalMarks"
+              placeholder="Total Marks"
+              value={testMeta.totalMarks}
+              onChange={handleMetaChange}
+            />
+          </div>
 
           {/* Difficulty Level Dropdown - value is ID */}
-          <select
-            className="border rounded-lg px-3 py-2 text-sm"
-            name="testDifficultyLevel1"
-            value={testMeta.testDifficultyLevel1}
-            onChange={(e) =>
-              handleMetaDropdown(
-                "testDifficultyLevel1",
-                e.target.value ? Number(e.target.value) : ""
-              )
-            }
-            disabled={loadingDifficulty}
-          >
-            <option value="">{loadingDifficulty ? "Loading..." : "Select Difficulty"}</option>
-            {difficultyLevels.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </select>
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">Difficulty Level</label>
+            <select
+              className="border rounded-lg px-3 py-2 text-sm"
+              name="testDifficultyLevel1"
+              value={testMeta.testDifficultyLevel1}
+              onChange={(e) =>
+                handleMetaDropdown(
+                  "testDifficultyLevel1",
+                  e.target.value ? Number(e.target.value) : ""
+                )
+              }
+              disabled={loadingDifficulty}
+            >
+              <option value="">{loadingDifficulty ? "Loading..." : "Select Difficulty"}</option>
+              {difficultyLevels.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
           {/* Instructions Dropdown - value is ID */}
-          <select
-            className="border rounded-lg px-3 py-2 text-sm"
-            name="instructions"
-            value={testMeta.instructions}
-            onChange={(e) =>
-              handleMetaDropdown("instructions", e.target.value ? Number(e.target.value) : "")
-            }
-            disabled={loadingInstruction}
-          >
-            <option value="">
-              {loadingInstruction ? "Loading Instructions..." : "Select Instructions"}
-            </option>
-            {instructionsList.map((i) => (
-              <option key={i.id} value={i.id}>
-                {i.name}
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 mb-1">Instructions</label>
+            <select
+              className="border rounded-lg px-3 py-2 text-sm"
+              name="instructions"
+              value={testMeta.instructions}
+              onChange={(e) =>
+                handleMetaDropdown("instructions", e.target.value ? Number(e.target.value) : "")
+              }
+              disabled={loadingInstruction}
+            >
+              <option value="">
+                {loadingInstruction ? "Loading Instructions..." : "Select Instructions"}
               </option>
-            ))}
-          </select>
-
-          {/* Total Questions (disabled) */}
-          {/* <input
-            className="border rounded-lg px-3 py-2 text-sm bg-gray-100"
-            type="text"
-            name="totalQuestions"
-            placeholder="Total Questions"
-            value={testMeta.totalQuestions}
-            disabled
-          /> */}
+              {instructionsList.map((i) => (
+                <option key={i.id} value={i.id}>
+                  {i.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -479,41 +499,104 @@ export default function CreateTest({ questions }: { questions: Question[] }) {
 
       {/* QUESTIONS PREVIEW */}
       <div>
-        <h2 className="text-lg font-bold mb-3 text-indigo-700">
-          Questions ({localQuestions.length})
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {localQuestions.map((q, idx) => (
-            <div
-              key={q.questionNumber + "-" + idx}
-              className="bg-white rounded-xl border border-gray-200 shadow-sm p-4"
+        <div className="flex justify-between items-center mb-3">
+          <h2 className="text-lg font-bold text-indigo-700">Questions ({localQuestions.length})</h2>
+          {/* View toggle buttons */}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setViewMode("card")}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium shadow cursor-pointer ${
+                viewMode === "card" ? "bg-indigo-600 text-white" : "bg-gray-200 text-gray-700"
+              }`}
             >
-              <div className="flex justify-between mb-3">
-                <span className="text-xs text-indigo-700 font-bold">Q{q.questionNumber}</span>
-                {q.sectionId && (
-                  <span className="bg-indigo-600/10 px-2 py-1 rounded-full text-xs text-indigo-700 font-semibold">
-                    Section: {sections.find((s) => s.id === q.sectionId)?.name || q.sectionId}
-                  </span>
-                )}
-              </div>
-              <div className="font-medium mb-2 text-gray-800">{q.question}</div>
-              <ul className="list-disc ml-5 text-gray-600 text-sm mb-2">
-                {q.options.map((opt, i) => (
-                  <li key={i}>{opt}</li>
-                ))}
-              </ul>
-              <div className="text-sm text-gray-500 mb-1">Answer: {q.answer.join(", ")}</div>
-              <div className="text-xs text-gray-400 italic">Solution: {q.solution}</div>
-            </div>
-          ))}
+              <LayoutGrid className="w-4 h-4" /> Card View
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("table")}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium shadow cursor-pointer ${
+                viewMode === "table" ? "bg-indigo-600 text-white" : "bg-gray-200 text-gray-700"
+              }`}
+            >
+              <TableIcon className="w-4 h-4" /> Table View
+            </button>
+          </div>
         </div>
+
+        {viewMode === "card" ? (
+          // CARD VIEW (existing)
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {localQuestions.map((q, idx) => (
+              <div
+                key={q.questionNumber + "-" + idx}
+                className="bg-white rounded-xl border border-gray-200 shadow-sm p-4"
+              >
+                <div className="flex justify-between mb-3">
+                  <span className="text-xs text-indigo-700 font-bold">Q{q.questionNumber}</span>
+                  {q.sectionId && (
+                    <span className="bg-indigo-600/10 px-2 py-1 rounded-full text-xs text-indigo-700 font-semibold">
+                      Section: {sections.find((s) => s.id === q.sectionId)?.name || q.sectionId}
+                    </span>
+                  )}
+                </div>
+                <div className="font-medium mb-2 text-gray-800">{q.question}</div>
+                <ul className="list-disc ml-5 text-gray-600 text-sm mb-2">
+                  {q.options.map((opt, i) => (
+                    <li key={i}>{opt}</li>
+                  ))}
+                </ul>
+                <div className="text-sm text-gray-500 mb-1">Answer: {q.answer.join(", ")}</div>
+                <div className="text-xs text-gray-400 italic">Solution: {q.solution}</div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          // TABLE VIEW
+          <div className="overflow-x-auto rounded-lg bg-white shadow-sm">
+            <table className="min-w-full border-collapse divide-y divide-gray-200 text-sm">
+              <thead className="bg-indigo-100">
+                <tr>
+                  <th className="p-2 text-left">Q#</th>
+                  <th className="p-2 text-left">Section</th>
+                  <th className="p-2 text-left">Question</th>
+                  <th className="p-2 text-left">Options</th>
+                  <th className="p-2 text-left">Answer</th>
+                  <th className="p-2 text-left">Solution</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {localQuestions.map((q, idx) => (
+                  <tr key={q.questionNumber + "-" + idx}>
+                    <td className="p-2 font-medium text-indigo-700">{q.questionNumber}</td>
+                    <td className="p-2">
+                      {q.sectionId
+                        ? sections.find((s) => s.id === q.sectionId)?.name || q.sectionId
+                        : "-"}
+                    </td>
+                    <td className="p-2">{q.question}</td>
+                    <td className="p-2">
+                      <ul className="list-disc ml-4">
+                        {q.options.map((opt, i) => (
+                          <li key={i}>{opt}</li>
+                        ))}
+                      </ul>
+                    </td>
+                    <td className="p-2">{q.answer.join(", ")}</td>
+                    <td className="p-2 text-gray-500 text-xs">{q.solution}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* FINAL PAYLOAD PRINT FOR DEV */}
-      <div className="mt-8 bg-gray-100 rounded-xl p-4 font-mono text-xs overflow-auto">
+      {/* <div className="mt-8 bg-gray-100 rounded-xl p-4 font-mono text-xs overflow-auto">
         <div className="mb-1 font-bold text-gray-700">Payload Preview:</div>
         <pre>{JSON.stringify({ testMetaData: testMeta, questions: localQuestions }, null, 2)}</pre>
-      </div>
+      </div> */}
     </div>
   );
 }

@@ -128,6 +128,7 @@ export async function fetchTestInstructionsList(): Promise<
 
 export async function createTest(payload): Promise<APIResponse<null>> {
   try {
+    const { testMetaData, questions } = payload;
     const res = await fetch(
       "https://evalusdevapi.thoughtprotraining.com/api/Tests/create-with-questions",
       {
@@ -135,7 +136,7 @@ export async function createTest(payload): Promise<APIResponse<null>> {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ payload }),
+        body: JSON.stringify({ testMetaData, questions }),
       }
     );
 
