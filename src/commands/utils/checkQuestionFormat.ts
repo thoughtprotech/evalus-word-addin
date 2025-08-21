@@ -162,9 +162,8 @@ function extractQuestions(lines: string[], htmlLines: string[]) {
   const questions: any[] = [];
   let i = 0;
   let qNum = 1;
-  let inDirection = false;
-  let currentDirectionTextParts: string[] = [];
-  let currentDirectionHtmlParts: string[] = [];
+  let lastDirectionText = "";
+  let lastDirectionHtml = "";
 
   while (i < lines.length) {
     const text = lines[i];
@@ -173,32 +172,31 @@ function extractQuestions(lines: string[], htmlLines: string[]) {
       continue;
     }
 
-    // Handle direction blocks: start with D-<n>) and end with a line '##End Essay'
+    // Extract direction blocks and store for next question
     const dirStart = isDirectionStart(text);
     if (dirStart) {
-      inDirection = true;
-      currentDirectionTextParts = [];
-      currentDirectionHtmlParts = [];
-      if (dirStart.remainder) currentDirectionTextParts.push(dirStart.remainder.trim());
-      currentDirectionHtmlParts.push(htmlLines[i] || "");
+      let directionTextParts: string[] = [];
+      let directionHtmlParts: string[] = [];
+      if (dirStart.remainder) directionTextParts.push(dirStart.remainder.trim());
+      directionHtmlParts.push(htmlLines[i] || "");
       i++;
-      // Accumulate additional direction paragraphs until a question header or end marker
       while (i < lines.length && !isDirectionEnd(lines[i]) && !matchQuestionStart(lines[i])) {
-        currentDirectionTextParts.push(lines[i].trim());
-        currentDirectionHtmlParts.push(htmlLines[i] || "");
+        directionTextParts.push(lines[i].trim());
+        directionHtmlParts.push(htmlLines[i] || "");
         i++;
       }
-      continue; // Next iteration will process question or end marker
+      lastDirectionText = directionTextParts.join(" ").trim();
+      lastDirectionHtml = wrapHtmlBlock(directionHtmlParts);
+      // consume end marker if present
+      if (i < lines.length && isDirectionEnd(lines[i])) i++;
+      continue;
     }
     if (isDirectionEnd(text)) {
-      inDirection = false;
-      currentDirectionTextParts = [];
-      currentDirectionHtmlParts = [];
       i++;
       continue;
     }
 
-  const qMatch = matchQuestionStart(text);
+    const qMatch = matchQuestionStart(text);
     if (!qMatch) {
       i++;
       continue;
@@ -208,8 +206,8 @@ function extractQuestions(lines: string[], htmlLines: string[]) {
       questionNumber: qNum,
       question: "",
       questionHtml: "",
-  direction: inDirection ? currentDirectionTextParts.join(" ").trim() : "",
-  directionHtml: inDirection ? wrapHtmlBlock(currentDirectionHtmlParts) : "",
+      direction: lastDirectionText,
+      directionHtml: lastDirectionHtml,
       options: [],
       optionsHtml: [],
       answer: [],
@@ -218,21 +216,22 @@ function extractQuestions(lines: string[], htmlLines: string[]) {
       solutionHtml: "",
     };
 
+    lastDirectionText = "";
+    lastDirectionHtml = "";
+
     const firstLineRemainder = qMatch.remainder?.trim() ?? "";
     const questionLines: string[] = [];
     const questionHtmlParts: string[] = [];
     if (firstLineRemainder) questionLines.push(firstLineRemainder);
-    // Include full HTML of the first question line to preserve equations/formatting
     questionHtmlParts.push(htmlLines[i] || "");
     i++;
 
-    // Accumulate question text until we encounter options/answer/solution/next question
     while (
       i < lines.length &&
       !containsAnyOption(lines[i]) &&
       !isAnswerLine(lines[i]).matched &&
       !isSolutionLine(lines[i]).matched &&
-  !matchQuestionStart(lines[i])
+      !matchQuestionStart(lines[i])
     ) {
       questionLines.push(lines[i].trim());
       questionHtmlParts.push(htmlLines[i] || "");
@@ -241,13 +240,12 @@ function extractQuestions(lines: string[], htmlLines: string[]) {
     questionObj.question = questionLines.join(" ").trim();
     questionObj.questionHtml = wrapHtmlBlock(questionHtmlParts);
 
-    // Gather options (may be multiple per paragraph)
-  const options: string[] = [];
+    const options: string[] = [];
     while (
       i < lines.length &&
       !isAnswerLine(lines[i]).matched &&
       !isSolutionLine(lines[i]).matched &&
-  !matchQuestionStart(lines[i])
+      !matchQuestionStart(lines[i])
     ) {
       const para = lines[i];
       const opts = splitOptionsFromParagraph(para);
@@ -259,20 +257,16 @@ function extractQuestions(lines: string[], htmlLines: string[]) {
     questionObj.options = options;
     questionObj.optionsHtml = options.map((t) => `<p>${escapeHtml(t)}</p>`);
 
-    // Answer
     if (i < lines.length && isAnswerLine(lines[i]).matched) {
       const ans = isAnswerLine(lines[i]);
       questionObj.answer = ans.letters;
-      // preserve original paragraph HTML for answers
       questionObj.answerHtml = htmlLines[i] || `<p>${escapeHtml(ans.tail)}</p>`;
       i++;
     }
 
-    // Solution
     if (i < lines.length && isSolutionLine(lines[i]).matched) {
       const sol = isSolutionLine(lines[i]);
       questionObj.solution = sol.text;
-      // preserve original paragraph HTML for solutions
       questionObj.solutionHtml = htmlLines[i] || `<p>${escapeHtml(sol.text)}</p>`;
       i++;
     }
