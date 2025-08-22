@@ -1,4 +1,11 @@
-export default async function checkFormatHelper(): Promise<{
+export interface PatternConfig {
+  questionPattern?: string; // must capture number in group 1, remainder(optional) in group 2
+  optionPattern?: string;   // pattern matching option label start, must capture label letter in group 1
+  answerPattern?: string;   // must capture tail (answers list) in group 1
+  solutionPattern?: string; // must capture solution/explanation text in group 1
+}
+
+export default async function checkFormatHelper(patterns?: PatternConfig): Promise<{
   success: boolean;
   message?: string;
 }> {
@@ -8,12 +15,12 @@ export default async function checkFormatHelper(): Promise<{
       paras.load("items");
       await context.sync();
 
-  const lines = paras.items.map((p) => p.text.trim());
+      const lines = paras.items.map((p) => p.text.trim());
 
-  // Also get HTML per paragraph to preserve equations and rich content
-  const htmlResults = paras.items.map((p) => p.getRange().getHtml());
-  await context.sync();
-  const htmlLines = htmlResults.map((r) => (r?.value ?? "").trim());
+      // Also get HTML per paragraph to preserve equations and rich content
+      const htmlResults = paras.items.map((p) => p.getRange().getHtml());
+      await context.sync();
+      const htmlLines = htmlResults.map((r) => (r?.value ?? "").trim());
       // Check if all lines are empty
       const nonEmptyLines = lines.filter((line) => line.length > 0);
       if (nonEmptyLines.length === 0) {
@@ -22,6 +29,9 @@ export default async function checkFormatHelper(): Promise<{
           message: "Document is empty.",
         };
       }
+
+      // Initialize dynamic regex (fallback to defaults if user supplied invalid ones)
+      initDynamicRegexes(patterns);
 
       const invalidSet = new Set(findInvalidParagraphs(lines));
 
@@ -54,6 +64,60 @@ export default async function checkFormatHelper(): Promise<{
   }
 }
 
+// ================= Dynamic Regex Handling =====================
+let QUESTION_RE: RegExp = /^\s*(?:Q(?:uestion)?\s*[:\.-]?\s*)?(\d+)\s*[\)\.\-:]?\s*(.*)$/i;
+let ANSWER_RE: RegExp = /^(?:A(?:d)?ns(?:wer)?|Correct\s*Answer)\s*[\.:\-\)]+\s*(.*)$/i;
+let SOLUTION_RE: RegExp = /^(?:Sol(?:ution)?|Explanation)\s*[\.:\-\)]+\s*(.*)$/i;
+// Option pattern must capture the label (a/b/c) in group 1. We build variants similar to existing logic if custom not provided.
+let OPTION_TOKEN_RES: RegExp[] = [
+  /(?:^|\s)\(?([a-zA-Z])\)\s+/g, // (a) text or (A) text
+  /(?:^|\s)([a-zA-Z])\)\s+/g, // a) text or A) text
+  /(?:^|\s)([a-zA-Z])\.\s+/g, // a. text or A. text
+];
+let OPTION_SINGLE_ANCHORS: RegExp[] = [
+  /^([a-zA-Z])\)\s+(.*)$/, // a)
+  /^\(([a-zA-Z])\)\s+(.*)$/, // (a)
+  /^([a-zA-Z])\.\s+(.*)$/, // a.
+];
+
+function buildRegex(raw?: string, flags = "i"): RegExp | null {
+  if (!raw) return null;
+  try {
+    // Allow user to optionally include leading & trailing slashes with flags, strip them.
+    const match = raw.match(/^\s*\/(.*)\/([gimuy]*)\s*$/);
+    if (match) {
+      return new RegExp(match[1], match[2] || flags);
+    }
+    return new RegExp(raw, flags);
+  } catch {
+    return null;
+  }
+}
+
+function initDynamicRegexes(patterns?: PatternConfig) {
+  if (!patterns) return;
+  const { questionPattern, optionPattern, answerPattern, solutionPattern } = patterns;
+
+  const q = buildRegex(questionPattern);
+  if (q) QUESTION_RE = q;
+  const a = buildRegex(answerPattern);
+  if (a) ANSWER_RE = a;
+  const s = buildRegex(solutionPattern);
+  if (s) SOLUTION_RE = s;
+  if (optionPattern) {
+    const opt = buildRegex(optionPattern, "gi");
+    if (opt) {
+      // Recreate token regex list with only user provided one (global required)
+      OPTION_TOKEN_RES = [opt];
+      // Single anchor detection: attempt to create three variants: raw with start anchor, capturing tail.
+      // Expect optionPattern already captures label; we derive tail by appending (.*)
+      const source = opt.source;
+      OPTION_SINGLE_ANCHORS = [new RegExp(source + "(.*)", "i")];
+    }
+  }
+}
+
+// ================= Original Logic (with dynamic regex usage) =================
 function findInvalidParagraphs(lines: string[]): number[] {
   const invalid: number[] = [];
   if (lines.length === 0) return [0];
@@ -83,7 +147,7 @@ function findInvalidParagraphs(lines: string[]): number[] {
       continue;
     }
 
-  const qMatch = matchQuestionStart(text);
+    const qMatch = matchQuestionStart(text);
     if (!qMatch) {
       // Not a question start; skip and mark as invalid only if it looks like a malformed question header
       if (/^\s*\d+/.test(text)) invalid.push(i);
@@ -100,7 +164,7 @@ function findInvalidParagraphs(lines: string[]): number[] {
       !containsAnyOption(lines[i]) &&
       !isAnswerLine(lines[i]).matched &&
       !isSolutionLine(lines[i]).matched &&
-  !matchQuestionStart(lines[i])
+      !matchQuestionStart(lines[i])
     ) {
       i++;
     }
@@ -112,7 +176,7 @@ function findInvalidParagraphs(lines: string[]): number[] {
       i < lines.length &&
       !isAnswerLine(lines[i]).matched &&
       !isSolutionLine(lines[i]).matched &&
-  !matchQuestionStart(lines[i])
+      !matchQuestionStart(lines[i])
     ) {
       const para = lines[i];
       const opts = splitOptionsFromParagraph(para);
@@ -139,9 +203,9 @@ function findInvalidParagraphs(lines: string[]): number[] {
         // Ensure answers map to available options (a->index0, etc.) if options exist
         answers.forEach((a) => {
           const idx = a.charCodeAt(0) - 97;
-          if (idx < 0 || idx >= Math.max(collectedOptions.length, 1)) {
-            invalid.push(i);
-          }
+            if (idx < 0 || idx >= Math.max(collectedOptions.length, 1)) {
+              invalid.push(i);
+            }
         });
       }
       i++;
@@ -283,14 +347,12 @@ function matchQuestionStart(
   line: string,
   expectedNumber?: number
 ): null | { number: number; remainder: string } {
-  // Accept formats: "1)", "1.", "1 -", optionally prefixed with Q or Question
-  const m = line.match(/^\s*(?:Q(?:uestion)?\s*[:\.-]?\s*)?(\d+)\s*[\)\.\-:]?\s*(.*)$/i);
+  const m = line.match(QUESTION_RE);
   if (!m) return null;
+  // We expect number in first capturing group
   const num = parseInt(m[1], 10);
   if (!Number.isFinite(num)) return null;
   if (expectedNumber !== undefined && num !== expectedNumber) {
-    // If numbering doesn't match expectation, still accept but treat as not a start
-    // This keeps validator lenient for documents with non-sequential numbering
     return { number: num, remainder: m[2] ?? "" };
   }
   return { number: num, remainder: m[2] ?? "" };
@@ -305,47 +367,40 @@ function splitOptionsFromParagraph(text: string): OptionEntry[] {
   // Normalize spaces
   const s = line.replace(/\s+/g, " ");
 
-  // Use a controlled approach: scan for tokens like a) / (a) / a.
   const tokens: { idx: number; label: string }[] = [];
-  const patterns: RegExp[] = [
-    /(?:^|\s)\(?([a-zA-Z])\)\s+/g, // (a) text or (A) text
-    /(?:^|\s)([a-zA-Z])\)\s+/g, // a) text or A) text
-    /(?:^|\s)([a-zA-Z])\.\s+/g, // a. text or A. text
-  ];
-
-  patterns.forEach((re) => {
+  OPTION_TOKEN_RES.forEach((re) => {
+    if (!re.global) return; // ensure global for iterative exec
+    re.lastIndex = 0;
     let m: RegExpExecArray | null;
     while ((m = re.exec(s)) !== null) {
-      tokens.push({ idx: m.index + (m[0].startsWith(" ") ? 1 : 0), label: m[1].toLowerCase() });
+      tokens.push({ idx: m.index + (m[0].startsWith(" ") ? 1 : 0), label: (m[1] || "").toLowerCase() });
     }
   });
 
   // Deduplicate tokens at same index, sort by position
-  const unique = Array.from(
-    new Map(tokens.map((t) => [t.idx, t])).values()
-  ).sort((a, b) => a.idx - b.idx);
+  const unique = Array.from(new Map(tokens.map((t) => [t.idx, t])).values()).sort((a, b) => a.idx - b.idx);
 
   if (unique.length === 0) {
-    // If the entire line starts like a single-labeled option without spacing variety, try simple anchors
-    const m =
-      s.match(/^([a-zA-Z])\)\s+(.*)$/) ||
-      s.match(/^\(([a-zA-Z])\)\s+(.*)$/) ||
-      s.match(/^([a-zA-Z])\.\s+(.*)$/);
-    if (m) return [{ label: m[1].toLowerCase(), text: (m[2] || "").trim() }];
+    for (const r of OPTION_SINGLE_ANCHORS) {
+      const m = s.match(r);
+      if (m) return [{ label: (m[1] || "").toLowerCase(), text: (m[2] || "").trim() }];
+    }
     return [];
   }
 
   const entries: OptionEntry[] = [];
   for (let i = 0; i < unique.length; i++) {
-    // Determine actual start of text for this token by matching label instance at index
-    // Try patterns in order to compute label length + trailing delimiter length
     const after = s.slice(unique[i].idx);
     let consumed = 0;
     const specificPatterns = [
-      /^\(?([a-zA-Z])\)\s+/, // (a) 
-      /^([a-zA-Z])\)\s+/, // a) 
-      /^([a-zA-Z])\.\s+/, // a. 
+      /^\(?([a-zA-Z])\)\s+/, // (a)
+      /^([a-zA-Z])\)\s+/, // a)
+      /^([a-zA-Z])\.\s+/, // a.
     ];
+    // If user custom pattern provided, attempt it first
+    if (OPTION_TOKEN_RES.length === 1) {
+      specificPatterns.unshift(new RegExp("^" + OPTION_TOKEN_RES[0].source));
+    }
     for (const sp of specificPatterns) {
       const m = after.match(sp);
       if (m) {
@@ -364,15 +419,19 @@ function splitOptionsFromParagraph(text: string): OptionEntry[] {
 function containsAnyOption(text: string): boolean {
   const s = (text || "").trim();
   if (!s) return false;
+  if (OPTION_TOKEN_RES.length === 1) {
+    const r = new RegExp("^" + OPTION_TOKEN_RES[0].source.replace(/\\g?/, ""), "i");
+    return r.test(s);
+  }
   return (
-    /^\(?[a-zA-Z]\)\s+/.test(s) || // (a) 
+    /^\(?[a-zA-Z]\)\s+/.test(s) || // (a)
     /^[a-zA-Z]\)\s+/.test(s) || // a)
     /^[a-zA-Z]\.\s+/.test(s) // a.
   );
 }
 
 function isAnswerLine(line: string): { matched: boolean; letters: string[]; tail: string } {
-  const m = line.match(/^(?:A(?:d)?ns(?:wer)?|Correct\s*Answer)\s*[\.:\-)]+\s*(.*)$/i);
+  const m = line.match(ANSWER_RE);
   if (!m) return { matched: false, letters: [], tail: "" };
   const tail = (m[1] || "").trim();
   const letters = Array.from(tail.matchAll(/[a-z]/gi)).map((x) => x[0].toLowerCase());
@@ -380,7 +439,7 @@ function isAnswerLine(line: string): { matched: boolean; letters: string[]; tail
 }
 
 function isSolutionLine(line: string): { matched: boolean; text: string } {
-  const m = line.match(/^(?:Sol(?:ution)?|Explanation)\s*[\.:\-)]+\s*(.*)$/i);
+  const m = line.match(SOLUTION_RE);
   if (!m) return { matched: false, text: "" };
   return { matched: true, text: (m[1] || "").trim() };
 }

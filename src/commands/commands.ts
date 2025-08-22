@@ -3,7 +3,7 @@
  * See LICENSE in the project root for license information.
  */
 
-import checkFormatHelper from "./utils/checkQuestionFormat";
+import checkFormatHelper, { PatternConfig } from "./utils/checkQuestionFormat";
 
 /* global Office, Word */
 
@@ -39,11 +39,24 @@ Office.actions.associate("action", action);
 
 // ──────────────────────────────────────────────────────────────
 // Validate and color-format the document
+// We attempt to read dynamic regex patterns (if previously stored by taskpane)
+// from OfficeRuntime.storage under key: dynamicPatterns
 // ──────────────────────────────────────────────────────────────
 
-// In commands.ts
-export async function checkFormat(event?: Office.AddinCommands.Event) {
-  const result = await checkFormatHelper();
+export async function checkFormat(event?: Office.AddinCommands.Event, patternConfig?: PatternConfig) {
+  let patterns: PatternConfig | undefined = patternConfig;
+  if (!patterns) {
+    try {
+      const stored = await OfficeRuntime.storage.getItem("dynamicPatterns");
+      if (stored) {
+        patterns = JSON.parse(stored);
+      }
+    } catch {
+      // ignore storage errors
+    }
+  }
+
+  const result = await checkFormatHelper(patterns);
 
   if (event && typeof event.completed === "function") {
     event.completed();

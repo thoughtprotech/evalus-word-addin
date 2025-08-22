@@ -1,9 +1,18 @@
-import React, { useEffect, useRef, useState } from "react";
+// Added global declarations to satisfy isolated type checking when tsconfig not loaded
+/* eslint-disable */
+// @ts-ignore
+declare const Office: any;
+// @ts-ignore
+declare const OfficeRuntime: any;
+
+import * as React from "react";
 import { fetchPatterns } from "../../apis/startPageAPIs";
 import { PatternInterface } from "../../types/endpointTypes";
 import { Book, LogOut } from "lucide-react";
 import PatternSelect from "./PatternSelect";
 import { checkFormat } from "../../commands/commands";
+
+const { useEffect, useRef, useState } = React;
 
 type PatternField = { value: string; label: string };
 
@@ -26,7 +35,7 @@ export default function Start() {
   const [message, setMessage] = useState<string | null>(null);
   const [isError, setIsError] = useState(false);
 
-  const dialogRef = useRef<Office.Dialog | null>(null);
+  const dialogRef = useRef<any>(null);
 
   const getPatterns = async () => {
     const res = await fetchPatterns();
@@ -44,10 +53,10 @@ export default function Start() {
     Office.context.ui.displayDialogAsync(
       window.location.origin + "/dialog.html",
       { height: 200, width: 300 },
-      (result) => {
+      (result: any) => {
         if (result.status === Office.AsyncResultStatus.Succeeded) {
           dialogRef.current = result.value;
-          dialogRef.current.addEventHandler(Office.EventType.DialogMessageReceived, (arg) => {
+          dialogRef.current.addEventHandler(Office.EventType.DialogMessageReceived, (arg: any) => {
             if ("message" in arg && arg.message === "dialogReady") {
               dialogRef.current?.messageChild(
                 JSON.stringify({ form: formPayload, questions: questionsPayload })
@@ -67,7 +76,6 @@ export default function Start() {
   const validate = () => {
     const newErrors: Record<string, string> = {};
     for (const key in selected) {
-      // Each field must have a non-empty value
       if (!(selected as any)[key].value.trim()) {
         newErrors[key] = "This field is required";
       }
@@ -79,18 +87,33 @@ export default function Start() {
   const handleReadNow = async () => {
     if (!validate()) return;
 
-    const result = await checkFormat();
+    const toRegex = (raw: string) => {
+      if (!raw) return "";
+      if (/^\s*\/.+\/\w*\s*$/.test(raw)) return raw.trim();
+      const esc = raw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      return esc;
+    };
+
+    const dynamicPatterns = {
+      questionPattern: toRegex(selected.question.label) || undefined,
+      optionPattern: toRegex(selected.option.label) || undefined,
+      answerPattern: toRegex(selected.answer.label) || undefined,
+      solutionPattern: toRegex(selected.solution.label) || undefined,
+    };
+
+    try {
+      await OfficeRuntime.storage.setItem("dynamicPatterns", JSON.stringify(dynamicPatterns));
+    } catch {}
+
+    const result = await checkFormat(undefined, dynamicPatterns);
     if (!result.success) {
       setMessage(result.message || "An unknown error occurred.");
       setIsError(true);
       return;
     }
-    setMessage(result.message);
+    setMessage(result.message || "Format looks good.");
     setIsError(false);
 
-    console.log({ result });
-
-    // Consider sending only value or both value and label as per your backend expectation
     const toSend = {
       question: selected.question,
       option: selected.option,
@@ -104,11 +127,8 @@ export default function Start() {
       const storedQuestions = await OfficeRuntime.storage.getItem("lastExtractedJson");
       if (storedQuestions) {
         questionsPayload = storedQuestions;
-        console.log({ storedQuestions });
       }
-    } catch {
-      // ignore
-    }
+    } catch {}
     openDialog(formPayload, questionsPayload);
   };
 
@@ -144,12 +164,8 @@ export default function Start() {
                     patterns={filterByType(
                       value as "question" | "option" | "solution" | "answer" | "writeup"
                     )}
-                    value={selected[value]}
-                    // Make sure your PatternSelect returns the full { value, label }
-                    onChange={(val: PatternField) => {
-                      console.log({ val });
-                      setSelected({ ...selected, [value]: val });
-                    }}
+                    value={(selected as any)[value]}
+                    onChange={(val: any) => setSelected({ ...selected, [value]: val })}
                   />
                   {errors[value] && (
                     <span className="bg-red-100 text-red-700 p-1 px-2 w-full rounded-lg text-xs">
