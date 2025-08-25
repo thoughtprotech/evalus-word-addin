@@ -3,7 +3,7 @@
  * See LICENSE in the project root for license information.
  */
 
-import checkFormatHelper, { PatternConfig } from "./utils/checkQuestionFormat";
+import checkFormatHelper, { PatternConfig } from "./utils/checkQuestionFormatV2";
 
 /* global Office, Word */
 
