@@ -46,7 +46,8 @@ export default async function checkFormatHelper(patterns?: PatternConfig): Promi
 
       await context.sync();
 
-      const html: string[] = htmlResults.map(r => r?.value || "");
+  // Normalize each paragraph's HTML: keep only <body> inner content (if present) and wrap in a single <div>.
+  const html: string[] = htmlResults.map(r => normalizeBodyHtml(r?.value || ""));
         const images: string[][] = imageResultMatrix.map(row => row.map((r: any) => r.value || ""));
 
       if (plain.every(l => !l.trim())) {
@@ -496,13 +497,14 @@ function parseQuestions(tokens: Token[], lines: string[]) {
     const dirHtml = (tokens[qStartIdx] as any).__dirHtml as string[];
     const dirImages = (tokens[qStartIdx] as any).__dirImages as string[];
 
-    const q: Q = {
+  const q: Q = {
       questionNumber: qOrdinal + 1,
       question: qToken.stemFirstLine,
       questionHtml: mergeHtml(qToken.html, (qToken as any).images || []),
       questionImages: [ ...((qToken as any).images || []) ],
       direction: dirText.join(" ").trim(),
-      directionHtml: dirHtml.join("\n"),
+  // Join direction fragments with a single space instead of newlines to avoid \n in stored HTML
+  directionHtml: dirHtml.join(" "),
       directionImages: [ ...dirImages ],
       options: [],
       optionsHtml: [],
@@ -533,36 +535,79 @@ function parseQuestions(tokens: Token[], lines: string[]) {
     // Remaining after stem continuation
     const afterStem = rest.slice(stemContinuation.length);
 
-    // Options: consecutive OPTION tokens
-    let optStopIndex = 0;
-    for (const t of afterStem) {
+    // Options: allow multi-paragraph options. For each OPTION token, absorb following
+    // OTHER / SOLUTION? (should not appear here) / image-only paragraphs until next OPTION/ANSWER/SOLUTION/boundary.
+    let optIndex = 0;
+    while (optIndex < afterStem.length) {
+      const t = afterStem[optIndex];
       if (t.kind !== TokenKind.OPTION) break;
-      const opt = t as OptionToken;
-      q.options.push(opt.optionText);
-      q.optionsHtml.push(mergeHtml(opt.html || escapeHtml(opt.optionText), opt.images));
-      q.optionImages.push([ ...(opt.images || []) ]);
-      optStopIndex++;
+      const optTok = t as OptionToken;
+      let optText = optTok.optionText.trim();
+      let optHtml = mergeHtml(optTok.html || escapeHtml(optText), optTok.images);
+      let optImgs: string[] = [ ...(optTok.images || []) ];
+      optIndex++;
+      // absorb continuation paragraphs
+      while (optIndex < afterStem.length) {
+        const cont = afterStem[optIndex];
+        if (cont.kind === TokenKind.OPTION || cont.kind === TokenKind.ANSWER || cont.kind === TokenKind.SOLUTION) break;
+        if (cont.kind === TokenKind.BLANK) { optIndex++; continue; }
+        // treat OTHER (and any non-boundary) as continuation (e.g., image-only paragraph)
+        optText += (optText ? ' ' : '') + lines[cont.lineIndex].trim();
+        optHtml += mergeHtml(cont.html || '', (cont as any).images || []);
+        optImgs.push(...((cont as any).images || []));
+        optIndex++;
+      }
+      q.options.push(optText);
+      q.optionsHtml.push(optHtml);
+      q.optionImages.push(optImgs);
     }
-    const afterOptions = afterStem.slice(optStopIndex);
+    const afterOptions = afterStem.slice(optIndex);
 
     // Answer: first ANSWER token if present
+    let answerConsumed = 0;
     if (afterOptions.length && afterOptions[0].kind === TokenKind.ANSWER) {
       const ans = afterOptions[0] as AnswerToken;
       q.answer = ans.letters;
       q.answerHtml = mergeHtml(ans.html || escapeHtml(ans.tail), ans.images);
       q.answerImages = [ ...(ans.images || []) ];
+      answerConsumed = 1;
     }
 
-    // Solution: look for first SOLUTION after answer
-    const afterAnswer = afterOptions.slice(afterOptions[0]?.kind === TokenKind.ANSWER ? 1 : 0);
+    // Solution: multi-paragraph. Start at first SOLUTION after answer, then absorb
+    // subsequent OTHER / SOLUTION / image-only paragraphs until boundary.
+    const afterAnswer = afterOptions.slice(answerConsumed);
     if (afterAnswer.length && afterAnswer[0].kind === TokenKind.SOLUTION) {
-      const sol = afterAnswer[0] as SolutionToken;
-      q.solution = sol.solution;
-      q.solutionHtml = mergeHtml(sol.html || escapeHtml(sol.solution), sol.images);
-      q.solutionImages = [ ...(sol.images || []) ];
+      let solIndex = 0;
+      const firstSol = afterAnswer[solIndex] as SolutionToken;
+      let solText = firstSol.solution.trim();
+      let solHtml = mergeHtml(firstSol.html || escapeHtml(firstSol.solution), firstSol.images);
+      let solImgs: string[] = [ ...(firstSol.images || []) ];
+      solIndex++;
+      while (solIndex < afterAnswer.length) {
+        const st = afterAnswer[solIndex];
+        if (st.kind === TokenKind.QUESTION || st.kind === TokenKind.DIRECTION_START || st.kind === TokenKind.DIRECTION_END) break;
+        if (st.kind === TokenKind.BLANK) { solIndex++; continue; }
+        if (st.kind === TokenKind.ANSWER) break; // unexpected but break defensively
+        // Allow additional SOLUTION token (rare) or OTHER as continuation
+        const addText = lines[st.lineIndex].trim();
+        if (addText) solText += (solText ? ' ' : '') + addText;
+        solHtml += mergeHtml(st.html || '', (st as any).images || []);
+        solImgs.push(...((st as any).images || []));
+        solIndex++;
+      }
+      q.solution = solText;
+      q.solutionHtml = solHtml;
+      q.solutionImages = solImgs;
     }
-
-    out.push(q);
+  // NOTE: We intentionally do NOT perform a final global image injection here anymore.
+  // Reason: Appending (previous behavior) could relocate image(s) to the end of the
+  // combined questionHtml, losing their relative paragraph ordering. By merging images
+  // only at the paragraph level (when each fragment is added) we retain original order
+  // across paragraphs. If getHtml() omitted inline <img> tags inside a paragraph that
+  // also contains text, we still append those images at the end of THAT paragraph's
+  // fragment (best we can without positional offsets). Advanced positioning would
+  // require OOXML parsing or placeholder insertion at authoring time.
+  out.push(q);
   });
 
   return out;
@@ -581,12 +626,48 @@ function escapeHtml(s: string) {
 // Merge original paragraph html with extracted base64 images (if images not already present in html).
 function mergeHtml(baseHtml: string, images: string[] = []): string {
   if (!images.length) return baseHtml;
-  // If html already has <img> tags we assume they represent the images.
-  if (/<img/i.test(baseHtml)) return baseHtml;
-  const imgTags = images
-    .filter(b64 => !!b64)
-    .map(b64 => `<img src="data:image/png;base64,${b64}" />`) // assume png; Word usually returns png
-    .join("");
-  if (!baseHtml.trim()) return imgTags;
-  return baseHtml + imgTags;
+  let updated = baseHtml || "";
+
+  // First, replace any local/temp Word image src placeholders with available base64 images in order.
+  updated = embedLocalImagePlaceholders(updated, images);
+
+  // Append any base64 images not already present (by value) to preserve availability (order per paragraph scope).
+  for (const b64 of images) {
+    if (!b64) continue;
+    if (!updated.includes(b64)) {
+      updated += `<img src="data:image/png;base64,${b64}" />`;
+    }
+  }
+  return updated;
+}
+
+// Replace Word local/temp image references (e.g., ~WRS{GUID}_files/image001.png) with our extracted base64 images, sequentially.
+function embedLocalImagePlaceholders(html: string, images: string[]): string {
+  if (!html) return html;
+  const PLACEHOLDER_SRC_RE = /(<img\b[^>]*?src=")(?!data:)([^"]+)("[^>]*>)/gi;
+  // We only want to replace if the src looks like a Word resource placeholder, not an http(s) link.
+  const isWordTemp = (src: string) => /~WRS|_files\/image\d+\.(png|jpg|jpeg|gif)/i.test(src) && !/^https?:/i.test(src);
+  let imgIndex = 0; // index into images array
+  const used: string[] = [];
+  const replaced = html.replace(PLACEHOLDER_SRC_RE, (full, pre, src, post) => {
+    if (!isWordTemp(src)) return full; // leave untouched
+    // Find next unused base64 image
+    while (imgIndex < images.length && !images[imgIndex]) imgIndex++;
+    if (imgIndex >= images.length) return full; // nothing left
+    const b64 = images[imgIndex++];
+    used.push(b64);
+    return `${pre}data:image/png;base64,${b64}${post}`;
+  });
+  return replaced;
+}
+
+// Extract only the body inner HTML (if full document markup present) and wrap in a div.
+function normalizeBodyHtml(raw: string): string {
+  if (!raw) return '<div></div>';
+  const cleaned = raw.replace(/\r/g, '');
+  const bodyMatch = cleaned.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+  let inner = (bodyMatch ? bodyMatch[1] : cleaned).trim();
+  // Remove bare newline characters to prevent "\n" escapes in JSON; preserve single spaces.
+  inner = inner.replace(/\n+/g, ' ');
+  return `<div>${inner}</div>`;
 }
