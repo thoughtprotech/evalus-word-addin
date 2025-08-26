@@ -26,6 +26,7 @@ export default async function checkFormatHelper(patterns?: PatternConfig): Promi
   try {
     initPatterns(patterns); // set (or keep) global regex
     return await Word.run(async context => {
+        
       const paras = context.document.body.paragraphs;
       paras.load("items");
       await context.sync();
@@ -599,6 +600,22 @@ function parseQuestions(tokens: Token[], lines: string[]) {
       q.solutionHtml = solHtml;
       q.solutionImages = solImgs;
     }
+  // Final pass: ensure any remaining Word temp image placeholders inside assembled HTML fields
+  // are replaced using the images already associated with that field. This avoids needing a
+  // secondary Word.run (cannot nest) and guarantees placeholders in concatenated fragments
+  // are handled even if earlier mergeHtml steps missed them.
+  q.questionHtml = embedLocalImagePlaceholders(q.questionHtml, q.questionImages);
+  q.directionHtml = embedLocalImagePlaceholders(q.directionHtml, q.directionImages);
+  q.answerHtml = embedLocalImagePlaceholders(q.answerHtml, q.answerImages);
+  q.solutionHtml = embedLocalImagePlaceholders(q.solutionHtml, q.solutionImages);
+  q.optionsHtml = q.optionsHtml.map((h, idx) => embedLocalImagePlaceholders(h, q.optionImages[idx] || []));
+  // Normalize data URI src attribute quotes to single quotes to reduce JSON escaping when serialized.
+  const normalizeQuotes = (h: string) => h ? h.replace(/src="data:image\/png;base64,([^"]+)"/gi, "src='data:image/png;base64,$1'") : h;
+  q.questionHtml = normalizeQuotes(q.questionHtml);
+  q.directionHtml = normalizeQuotes(q.directionHtml);
+  q.answerHtml = normalizeQuotes(q.answerHtml);
+  q.solutionHtml = normalizeQuotes(q.solutionHtml);
+  q.optionsHtml = q.optionsHtml.map(h => normalizeQuotes(h));
   // NOTE: We intentionally do NOT perform a final global image injection here anymore.
   // Reason: Appending (previous behavior) could relocate image(s) to the end of the
   // combined questionHtml, losing their relative paragraph ordering. By merging images
@@ -642,7 +659,7 @@ function mergeHtml(baseHtml: string, images: string[] = []): string {
 }
 
 // Replace Word local/temp image references (e.g., ~WRS{GUID}_files/image001.png) with our extracted base64 images, sequentially.
-function embedLocalImagePlaceholders(html: string, images: string[]): string {
+export function embedLocalImagePlaceholders(html: string, images: string[]): string {
   if (!html) return html;
   const PLACEHOLDER_SRC_RE = /(<img\b[^>]*?src=")(?!data:)([^"]+)("[^>]*>)/gi;
   // We only want to replace if the src looks like a Word resource placeholder, not an http(s) link.
@@ -670,4 +687,37 @@ function normalizeBodyHtml(raw: string): string {
   // Remove bare newline characters to prevent "\n" escapes in JSON; preserve single spaces.
   inner = inner.replace(/\n+/g, ' ');
   return `<div>${inner}</div>`;
+}
+
+// ------------------ Public Helper: Replace Word Temp Image Sources in Arbitrary HTML ------------------
+/**
+ * Given an HTML snippet (e.g. copied from Word) containing temporary Word image src values like:
+ *   <img src="~WRS{GUID}_files/image001.png">
+ * this will attempt to retrieve all inline pictures in the current document (in reading order),
+ * collect their base64 data, and sequentially substitute those placeholders with data URLs.
+ *
+ * Notes / Limitations:
+ * - Word JavaScript API does not expose the original temp filenames, so mapping is positional.
+ * - The first placeholder encountered in the provided HTML is replaced with the first available
+ *   base64 image from the document, the second with the next, and so on.
+ * - If there are more placeholders than extracted images, the extras are left unchanged.
+ * - If the HTML already contains data:image src values, they are left intact.
+ */
+export async function replaceWordTempImageSrc(html: string): Promise<string> {
+  if (!html || !/<img/i.test(html)) return html;
+  try {
+    const allImages: string[] = await Word.run(async context => {
+      const pics = context.document.body.inlinePictures;
+      pics.load("items");
+      await context.sync();
+      const results = pics.items.map(p => p.getBase64ImageSrc());
+      await context.sync();
+      return results.map(r => (r as any).value || "").filter(Boolean);
+    });
+    if (!allImages.length) return html; // nothing to substitute
+    return embedLocalImagePlaceholders(html, allImages);
+  } catch (e) {
+    console.error("replaceWordTempImageSrc failed", e);
+    return html; // fail safe: return original
+  }
 }
