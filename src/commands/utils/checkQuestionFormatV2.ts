@@ -263,8 +263,32 @@ function tokenize(lines: string[], html: string[], images: string[][]): Token[] 
       return { kind: TokenKind.OPTION, lineIndex: i, text: raw, html: paraHtml, images: paraImages, label: m[0][0].toLowerCase(), optionText: remainder } as OptionToken;
         }
         case 'ANSWER': {
-          const letters = Array.from(remainder.matchAll(/[a-z]/gi)).map(x => x[0].toLowerCase());
-      return { kind: TokenKind.ANSWER, lineIndex: i, text: raw, html: paraHtml, images: paraImages, letters, tail: remainder } as AnswerToken;
+          // Clean leading separators after the marker
+          const remainderClean = remainder.replace(/^[\s\)\.:;\-]+/, '');
+
+          // Split on any non-letter separator, keep only single-letter tokens
+          const rawTokens = remainderClean
+            .split(/[^A-Za-z]+/)
+            .filter(Boolean);
+
+          // Keep single letters, lower-case, de-duplicate (order preserved)
+          const letters = Array.from(
+            new Set(
+              rawTokens
+                .filter(t => t.length === 1)
+                .map(t => t.toLowerCase())
+            )
+          );
+
+          return {
+            kind: TokenKind.ANSWER,
+            lineIndex: i,
+            text: raw,
+            html: paraHtml,
+            images: paraImages,
+            letters,
+            tail: remainderClean
+          } as AnswerToken;
         }
         case 'SOLUTION': {
       return { kind: TokenKind.SOLUTION, lineIndex: i, text: raw, html: paraHtml, images: paraImages, solution: remainder } as SolutionToken;
@@ -384,91 +408,102 @@ function parseQuestions(tokens: Token[], lines: string[]) {
     questionNumber: number;
     question: string;
     questionHtml: string;
-  questionImages: string[];
+    questionImages: string[];
     direction: string;
     directionHtml: string;
-  directionImages: string[];
+    directionImages: string[];
     options: string[];
     optionsHtml: string[];
-  optionImages: string[][];
+    optionImages: string[][];
     answer: string[];
     answerHtml: string;
-  answerImages: string[];
+    answerImages: string[];
     solution: string;
     solutionHtml: string;
-  solutionImages: string[];
+    solutionImages: string[];
   }
 
   const out: Q[] = [];
-  let i = 0;
 
-  let currentDirectionTextParts: string[] = [];
-  let currentDirectionHtmlParts: string[] = [];
+  let currentDirectionText: string[] = [];
+  let currentDirectionHtml: string[] = [];
   let currentDirectionImages: string[] = [];
 
-  const flushDirectionIfEnd = (tk: Token) => {
-    if (tk.kind === TokenKind.DIRECTION_END) {
-      currentDirectionTextParts = [];
-      currentDirectionHtmlParts = [];
-  currentDirectionImages = [];
+  const startDirection = (startToken: DirectionStartToken) => {
+    currentDirectionText = [];
+    currentDirectionHtml = [];
+    currentDirectionImages = [];
+    if (startToken.first) currentDirectionText.push(startToken.first);
+    currentDirectionHtml.push(mergeHtml(startToken.html || "", (startToken as any).images || []));
+    currentDirectionImages.push(...((startToken as any).images || []));
+  };
+
+  const extendDirection = (t: Token) => {
+    if (t.kind !== TokenKind.BLANK) {
+      currentDirectionText.push(lines[t.lineIndex].trim());
+      currentDirectionHtml.push(mergeHtml(t.html || "", (t as any).images || []));
+      currentDirectionImages.push(...((t as any).images || []));
     }
   };
 
-  while (i < tokens.length) {
-    const tk = tokens[i];
-
-    if (tk.kind === TokenKind.DIRECTION_START) {
-      // Start (or replace) direction
-      currentDirectionTextParts = [];
-      currentDirectionHtmlParts = [];
-  currentDirectionImages = [];
-
-      const start = tk as DirectionStartToken;
-      if (start.first) {
-        currentDirectionTextParts.push(start.first);
-      }
-  currentDirectionHtmlParts.push(mergeHtml((tk as DirectionStartToken).html || "", (tk as any).images || []));
-  currentDirectionImages.push(...((tk as any).images || []));
-
-      // Consume trailing lines until a boundary (question or direction end/start)
-      i++;
-      while (
-        i < tokens.length &&
-        tokens[i].kind !== TokenKind.QUESTION &&
-        tokens[i].kind !== TokenKind.DIRECTION_END &&
-        tokens[i].kind !== TokenKind.DIRECTION_START
-      ) {
-        if (tokens[i].kind !== TokenKind.BLANK) {
-          currentDirectionTextParts.push(lines[tokens[i].lineIndex].trim());
-          currentDirectionHtmlParts.push(mergeHtml(tokens[i].html || "", (tokens[i] as any).images || []));
-          currentDirectionImages.push(...((tokens[i] as any).images || []));
+  // Preprocess direction segments by walking tokens once
+  for (let idx = 0; idx < tokens.length; idx++) {
+    const t = tokens[idx];
+    if (t.kind === TokenKind.DIRECTION_START) {
+      startDirection(t as DirectionStartToken);
+      // absorb following non-boundary tokens as direction body
+      for (let j = idx + 1; j < tokens.length; j++) {
+        const nt = tokens[j];
+        if (nt.kind === TokenKind.QUESTION || nt.kind === TokenKind.DIRECTION_START || nt.kind === TokenKind.DIRECTION_END) {
+          idx = j - 1; // main loop will advance
+          break;
         }
-        i++;
+        extendDirection(nt);
+        if (j === tokens.length - 1) idx = j; // end reached
       }
-      continue;
+    } else if (t.kind === TokenKind.DIRECTION_END) {
+      // clear direction
+      currentDirectionText = [];
+      currentDirectionHtml = [];
+      currentDirectionImages = [];
     }
+    // Store a snapshot of direction context on the token for later grouping
+    (t as any).__dirText = [...currentDirectionText];
+    (t as any).__dirHtml = [...currentDirectionHtml];
+    (t as any).__dirImages = [...currentDirectionImages];
+  }
 
-    if (tk.kind === TokenKind.DIRECTION_END) {
-      flushDirectionIfEnd(tk);
-      i++;
-      continue;
+  // Collect indices of question tokens
+  const questionIndices: number[] = tokens
+    .map((t, i) => (t.kind === TokenKind.QUESTION ? i : -1))
+    .filter(i => i >= 0);
+
+  questionIndices.forEach((qStartIdx, qOrdinal) => {
+    // Find boundary (exclusive end)
+    let end = tokens.length;
+    for (let j = qStartIdx + 1; j < tokens.length; j++) {
+      const k = tokens[j].kind;
+      if (k === TokenKind.QUESTION || k === TokenKind.DIRECTION_START || k === TokenKind.DIRECTION_END) {
+        end = j;
+        break;
+      }
     }
+    const segment = tokens.slice(qStartIdx, end);
+    const qToken = segment[0] as QuestionToken;
 
-    if (tk.kind !== TokenKind.QUESTION) {
-      i++;
-      continue;
-    }
+    // Build question base
+    const dirText = (tokens[qStartIdx] as any).__dirText as string[];
+    const dirHtml = (tokens[qStartIdx] as any).__dirHtml as string[];
+    const dirImages = (tokens[qStartIdx] as any).__dirImages as string[];
 
-    // Build question
-    const qTok = tk as QuestionToken;
     const q: Q = {
-      questionNumber: out.length + 1,
-      question: qTok.stemFirstLine,
-      questionHtml: mergeHtml((qTok as QuestionToken).html, (qTok as any).images || []),
-      questionImages: [ ...((qTok as any).images || []) ],
-      direction: currentDirectionTextParts.join(" ").trim(),
-      directionHtml: currentDirectionHtmlParts.join("\n"),
-      directionImages: [ ...currentDirectionImages ],
+      questionNumber: qOrdinal + 1,
+      question: qToken.stemFirstLine,
+      questionHtml: mergeHtml(qToken.html, (qToken as any).images || []),
+      questionImages: [ ...((qToken as any).images || []) ],
+      direction: dirText.join(" ").trim(),
+      directionHtml: dirHtml.join("\n"),
+      directionImages: [ ...dirImages ],
       options: [],
       optionsHtml: [],
       optionImages: [],
@@ -480,65 +515,55 @@ function parseQuestions(tokens: Token[], lines: string[]) {
       solutionImages: []
     };
 
-    i++;
+    // classify remaining tokens in segment (excluding first question token)
+    const rest = segment.slice(1);
 
-    // Collect extra stem lines
-    while (i < tokens.length) {
-      const nx = tokens[i];
-      if (
-        nx.kind === TokenKind.OPTION ||
-        nx.kind === TokenKind.ANSWER ||
-        nx.kind === TokenKind.SOLUTION ||
-        nx.kind === TokenKind.QUESTION ||
-        nx.kind === TokenKind.DIRECTION_START ||
-        nx.kind === TokenKind.DIRECTION_END
-      ) {
-        break;
+    // Stem continuation tokens come first until we hit OPTION/ANSWER/SOLUTION
+    const stemContinuation: Token[] = [];
+    for (const t of rest) {
+      if (t.kind === TokenKind.OPTION || t.kind === TokenKind.ANSWER || t.kind === TokenKind.SOLUTION) break;
+      if (t.kind !== TokenKind.BLANK) {
+        q.question += (q.question ? " " : "") + lines[t.lineIndex].trim();
+        q.questionHtml += mergeHtml(t.html || "", (t as any).images || []);
+        q.questionImages.push(...((t as any).images || []));
       }
-
-      if (nx.kind !== TokenKind.BLANK) {
-        q.question += (q.question ? " " : "") + lines[nx.lineIndex].trim();
-  q.questionHtml += mergeHtml(tokens[i].html || "", (tokens[i] as any).images || []);
-  q.questionImages.push(...((tokens[i] as any).images || []));
-      }
-      i++;
+      stemContinuation.push(t);
     }
 
-    // Options
-    while (i < tokens.length && tokens[i].kind === TokenKind.OPTION) {
-      const opt = tokens[i] as OptionToken;
+    // Remaining after stem continuation
+    const afterStem = rest.slice(stemContinuation.length);
+
+    // Options: consecutive OPTION tokens
+    let optStopIndex = 0;
+    for (const t of afterStem) {
+      if (t.kind !== TokenKind.OPTION) break;
+      const opt = t as OptionToken;
       q.options.push(opt.optionText);
-  q.optionsHtml.push(mergeHtml(opt.html || escapeHtml(opt.optionText), opt.images));
-  q.optionImages.push([ ...(opt.images || []) ]);
-      i++;
+      q.optionsHtml.push(mergeHtml(opt.html || escapeHtml(opt.optionText), opt.images));
+      q.optionImages.push([ ...(opt.images || []) ]);
+      optStopIndex++;
     }
+    const afterOptions = afterStem.slice(optStopIndex);
 
-    // Answer
-    if (i < tokens.length && tokens[i].kind === TokenKind.ANSWER) {
-      const ans = tokens[i] as AnswerToken;
+    // Answer: first ANSWER token if present
+    if (afterOptions.length && afterOptions[0].kind === TokenKind.ANSWER) {
+      const ans = afterOptions[0] as AnswerToken;
       q.answer = ans.letters;
-  q.answerHtml = mergeHtml(ans.html || escapeHtml(ans.tail), ans.images);
-  q.answerImages = [ ...(ans.images || []) ];
-      i++;
+      q.answerHtml = mergeHtml(ans.html || escapeHtml(ans.tail), ans.images);
+      q.answerImages = [ ...(ans.images || []) ];
     }
 
-    // Solution (optional)
-    if (i < tokens.length && tokens[i].kind === TokenKind.SOLUTION) {
-      const sol = tokens[i] as SolutionToken;
+    // Solution: look for first SOLUTION after answer
+    const afterAnswer = afterOptions.slice(afterOptions[0]?.kind === TokenKind.ANSWER ? 1 : 0);
+    if (afterAnswer.length && afterAnswer[0].kind === TokenKind.SOLUTION) {
+      const sol = afterAnswer[0] as SolutionToken;
       q.solution = sol.solution;
-  q.solutionHtml = mergeHtml(sol.html || escapeHtml(sol.solution), sol.images);
-  q.solutionImages = [ ...(sol.images || []) ];
-      i++;
-    }
-
-    // If direction ends immediately after question block, consume marker + clear
-    if (i < tokens.length && tokens[i].kind === TokenKind.DIRECTION_END) {
-      flushDirectionIfEnd(tokens[i]);
-      i++;
+      q.solutionHtml = mergeHtml(sol.html || escapeHtml(sol.solution), sol.images);
+      q.solutionImages = [ ...(sol.images || []) ];
     }
 
     out.push(q);
-  }
+  });
 
   return out;
 }
