@@ -30,18 +30,31 @@ export default async function checkFormatHelper(patterns?: PatternConfig): Promi
       paras.load("items");
       await context.sync();
 
-      // Collect plain + html
-      const plain: string[] = paras.items.map(p => p.text || "");
-      const htmlPromises = paras.items.map(p => p.getRange().getHtml());
+      // Load inline pictures for each paragraph
+      paras.items.forEach(p => p.inlinePictures.load("items"));
       await context.sync();
-      const html: string[] = htmlPromises.map(h => (h?.value || ""));
+
+      // Issue base64 image requests
+      // Collect base64 image client results (type loosely any to avoid needing specific Office typings here)
+      const imageResultMatrix = paras.items.map(p => {
+        return p.inlinePictures.items.map(pic => pic.getBase64ImageSrc());
+      });
+
+      // Collect plain + html (request html after pictures so we only sync once more)
+      const plain: string[] = paras.items.map(p => p.text || "");
+      const htmlResults = paras.items.map(p => p.getRange().getHtml());
+
+      await context.sync();
+
+      const html: string[] = htmlResults.map(r => r?.value || "");
+        const images: string[][] = imageResultMatrix.map(row => row.map((r: any) => r.value || ""));
 
       if (plain.every(l => !l.trim())) {
         return { success: false, message: "Document is empty." };
       }
 
-      // Phase 1: tokenize
-      const tokens = tokenize(plain);
+  // Phase 1: tokenize (now passes html + images so tokens carry original assets)
+  const tokens = tokenize(plain, html, images);
 
       // Phase 2: validate
       const invalidIdx = validateTokens(tokens);
@@ -63,7 +76,7 @@ export default async function checkFormatHelper(patterns?: PatternConfig): Promi
       }
 
       // Phase 3: parse questions
-      const questions = parseQuestions(tokens, plain, html);
+  const questions = parseQuestions(tokens, plain);
 
       await OfficeRuntime.storage.setItem("lastExtractedJson", JSON.stringify(questions));
       return { success: true };
@@ -163,7 +176,9 @@ enum TokenKind {
 interface BaseToken {
   kind: TokenKind;
   lineIndex: number;
-  text: string;
+  text: string;       // plain text of paragraph
+  html: string;       // original paragraph HTML (may exclude images)
+  images: string[];   // base64 images found in this paragraph
 }
 
 interface QuestionToken extends BaseToken {
@@ -203,24 +218,29 @@ type Token =
   | DirectionStartToken;
 
 // ------------------ Tokenizer ------------------
-function tokenize(lines: string[]): Token[] {
+function tokenize(lines: string[], html: string[], images: string[][]): Token[] {
   let seqQuestionCounter = 0; // fallback sequence for unnumbered question markers
 
   return lines.map((raw, i): Token => {
     const text = raw.trim();
+    const paraHtml = html[i] || "";
+    const paraImages = images[i] || [];
 
-    if (!text) {
-      return { kind: TokenKind.BLANK, lineIndex: i, text: raw };
+    const hasMeaningfulHtml = /<img|<picture|<table|<svg|<o:|<span|<div/i.test(paraHtml);
+
+    // Treat image/formatting-only paragraphs (empty text but with HTML) as OTHER so they are not discarded.
+    if (!text && !hasMeaningfulHtml && paraImages.length === 0) {
+      return { kind: TokenKind.BLANK, lineIndex: i, text: raw, html: paraHtml, images: paraImages };
     }
 
     // Numeric direction start with captured first part
     const dNum = DIR_START.exec(text);
     if (dNum) {
-      return { kind: TokenKind.DIRECTION_START, lineIndex: i, text: raw, first: (dNum[1] || '').trim() };
+  return { kind: TokenKind.DIRECTION_START, lineIndex: i, text: raw, html: paraHtml, images: paraImages, first: (dNum[1] || '').trim() };
     }
 
     if (DIR_END.test(text)) {
-      return { kind: TokenKind.DIRECTION_END, lineIndex: i, text: raw };
+  return { kind: TokenKind.DIRECTION_END, lineIndex: i, text: raw, html: paraHtml, images: paraImages };
     }
 
     for (const entry of PATTERN_MAP) {
@@ -231,28 +251,29 @@ function tokenize(lines: string[]): Token[] {
 
       switch (entry.type) {
         case 'DIRECTION_START': {
-          return { kind: TokenKind.DIRECTION_START, lineIndex: i, text: raw, first: remainder } as DirectionStartToken;
+          return { kind: TokenKind.DIRECTION_START, lineIndex: i, text: raw, html: paraHtml, images: paraImages, first: remainder } as DirectionStartToken;
         }
         case 'QUESTION': {
           const digits = m[0].match(/^(\d+)/);
           const number = digits ? parseInt(digits[1], 10) : ++seqQuestionCounter;
           if (!digits) seqQuestionCounter = number;
-          return { kind: TokenKind.QUESTION, lineIndex: i, text: raw, number, stemFirstLine: remainder } as QuestionToken;
+      return { kind: TokenKind.QUESTION, lineIndex: i, text: raw, html: paraHtml, images: paraImages, number, stemFirstLine: remainder } as QuestionToken;
         }
         case 'OPTION': {
-          return { kind: TokenKind.OPTION, lineIndex: i, text: raw, label: m[0][0].toLowerCase(), optionText: remainder } as OptionToken;
+      return { kind: TokenKind.OPTION, lineIndex: i, text: raw, html: paraHtml, images: paraImages, label: m[0][0].toLowerCase(), optionText: remainder } as OptionToken;
         }
         case 'ANSWER': {
           const letters = Array.from(remainder.matchAll(/[a-z]/gi)).map(x => x[0].toLowerCase());
-          return { kind: TokenKind.ANSWER, lineIndex: i, text: raw, letters, tail: remainder } as AnswerToken;
+      return { kind: TokenKind.ANSWER, lineIndex: i, text: raw, html: paraHtml, images: paraImages, letters, tail: remainder } as AnswerToken;
         }
         case 'SOLUTION': {
-          return { kind: TokenKind.SOLUTION, lineIndex: i, text: raw, solution: remainder } as SolutionToken;
+      return { kind: TokenKind.SOLUTION, lineIndex: i, text: raw, html: paraHtml, images: paraImages, solution: remainder } as SolutionToken;
         }
       }
     }
 
-    return { kind: TokenKind.OTHER, lineIndex: i, text: raw };
+    // OTHER (includes image-only paragraphs)
+    return { kind: TokenKind.OTHER, lineIndex: i, text: raw, html: paraHtml, images: paraImages };
   });
 }
 
@@ -358,19 +379,24 @@ function validateTokens(tokens: Token[]): Set<number> {
 }
 
 // ------------------ Parser ------------------
-function parseQuestions(tokens: Token[], lines: string[], html: string[]) {
+function parseQuestions(tokens: Token[], lines: string[]) {
   interface Q {
     questionNumber: number;
     question: string;
     questionHtml: string;
+  questionImages: string[];
     direction: string;
     directionHtml: string;
+  directionImages: string[];
     options: string[];
     optionsHtml: string[];
+  optionImages: string[][];
     answer: string[];
     answerHtml: string;
+  answerImages: string[];
     solution: string;
     solutionHtml: string;
+  solutionImages: string[];
   }
 
   const out: Q[] = [];
@@ -378,11 +404,13 @@ function parseQuestions(tokens: Token[], lines: string[], html: string[]) {
 
   let currentDirectionTextParts: string[] = [];
   let currentDirectionHtmlParts: string[] = [];
+  let currentDirectionImages: string[] = [];
 
   const flushDirectionIfEnd = (tk: Token) => {
     if (tk.kind === TokenKind.DIRECTION_END) {
       currentDirectionTextParts = [];
       currentDirectionHtmlParts = [];
+  currentDirectionImages = [];
     }
   };
 
@@ -393,12 +421,14 @@ function parseQuestions(tokens: Token[], lines: string[], html: string[]) {
       // Start (or replace) direction
       currentDirectionTextParts = [];
       currentDirectionHtmlParts = [];
+  currentDirectionImages = [];
 
       const start = tk as DirectionStartToken;
       if (start.first) {
         currentDirectionTextParts.push(start.first);
       }
-      currentDirectionHtmlParts.push(html[tk.lineIndex] || "");
+  currentDirectionHtmlParts.push(mergeHtml((tk as DirectionStartToken).html || "", (tk as any).images || []));
+  currentDirectionImages.push(...((tk as any).images || []));
 
       // Consume trailing lines until a boundary (question or direction end/start)
       i++;
@@ -410,7 +440,8 @@ function parseQuestions(tokens: Token[], lines: string[], html: string[]) {
       ) {
         if (tokens[i].kind !== TokenKind.BLANK) {
           currentDirectionTextParts.push(lines[tokens[i].lineIndex].trim());
-          currentDirectionHtmlParts.push(html[tokens[i].lineIndex] || "");
+          currentDirectionHtmlParts.push(mergeHtml(tokens[i].html || "", (tokens[i] as any).images || []));
+          currentDirectionImages.push(...((tokens[i] as any).images || []));
         }
         i++;
       }
@@ -433,15 +464,20 @@ function parseQuestions(tokens: Token[], lines: string[], html: string[]) {
     const q: Q = {
       questionNumber: out.length + 1,
       question: qTok.stemFirstLine,
-      questionHtml: html[qTok.lineIndex] || "",
+      questionHtml: mergeHtml((qTok as QuestionToken).html, (qTok as any).images || []),
+      questionImages: [ ...((qTok as any).images || []) ],
       direction: currentDirectionTextParts.join(" ").trim(),
       directionHtml: currentDirectionHtmlParts.join("\n"),
+      directionImages: [ ...currentDirectionImages ],
       options: [],
       optionsHtml: [],
+      optionImages: [],
       answer: [],
       answerHtml: "",
+      answerImages: [],
       solution: "",
-      solutionHtml: ""
+      solutionHtml: "",
+      solutionImages: []
     };
 
     i++;
@@ -462,7 +498,8 @@ function parseQuestions(tokens: Token[], lines: string[], html: string[]) {
 
       if (nx.kind !== TokenKind.BLANK) {
         q.question += (q.question ? " " : "") + lines[nx.lineIndex].trim();
-        q.questionHtml += html[nx.lineIndex] || "";
+  q.questionHtml += mergeHtml(tokens[i].html || "", (tokens[i] as any).images || []);
+  q.questionImages.push(...((tokens[i] as any).images || []));
       }
       i++;
     }
@@ -471,7 +508,8 @@ function parseQuestions(tokens: Token[], lines: string[], html: string[]) {
     while (i < tokens.length && tokens[i].kind === TokenKind.OPTION) {
       const opt = tokens[i] as OptionToken;
       q.options.push(opt.optionText);
-      q.optionsHtml.push(html[opt.lineIndex] || escapeHtml(opt.optionText));
+  q.optionsHtml.push(mergeHtml(opt.html || escapeHtml(opt.optionText), opt.images));
+  q.optionImages.push([ ...(opt.images || []) ]);
       i++;
     }
 
@@ -479,7 +517,8 @@ function parseQuestions(tokens: Token[], lines: string[], html: string[]) {
     if (i < tokens.length && tokens[i].kind === TokenKind.ANSWER) {
       const ans = tokens[i] as AnswerToken;
       q.answer = ans.letters;
-      q.answerHtml = html[ans.lineIndex] || escapeHtml(ans.tail);
+  q.answerHtml = mergeHtml(ans.html || escapeHtml(ans.tail), ans.images);
+  q.answerImages = [ ...(ans.images || []) ];
       i++;
     }
 
@@ -487,7 +526,8 @@ function parseQuestions(tokens: Token[], lines: string[], html: string[]) {
     if (i < tokens.length && tokens[i].kind === TokenKind.SOLUTION) {
       const sol = tokens[i] as SolutionToken;
       q.solution = sol.solution;
-      q.solutionHtml = html[sol.lineIndex] || escapeHtml(sol.solution);
+  q.solutionHtml = mergeHtml(sol.html || escapeHtml(sol.solution), sol.images);
+  q.solutionImages = [ ...(sol.images || []) ];
       i++;
     }
 
@@ -511,4 +551,17 @@ function escapeHtml(s: string) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+// Merge original paragraph html with extracted base64 images (if images not already present in html).
+function mergeHtml(baseHtml: string, images: string[] = []): string {
+  if (!images.length) return baseHtml;
+  // If html already has <img> tags we assume they represent the images.
+  if (/<img/i.test(baseHtml)) return baseHtml;
+  const imgTags = images
+    .filter(b64 => !!b64)
+    .map(b64 => `<img src="data:image/png;base64,${b64}" />`) // assume png; Word usually returns png
+    .join("");
+  if (!baseHtml.trim()) return imgTags;
+  return baseHtml + imgTags;
 }
